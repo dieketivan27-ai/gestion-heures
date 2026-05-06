@@ -59,6 +59,12 @@ export class ApiService {
     return this.http.get<any[]>(`${this.base}/rapports/paiement`, { params });
   }
 
+  importExcel(file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post(`${this.base}/rapports/import-excel`, formData);
+  }
+
   // RÉFÉRENTIELS
   getDepartements(): Observable<Departement[]> { return this.http.get<Departement[]>(`${this.base}/departements`); }
   createDepartement(d: any): Observable<any> { return this.http.post(`${this.base}/departements`, d); }

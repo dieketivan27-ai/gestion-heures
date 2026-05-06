@@ -27,12 +27,23 @@ const storage = multer.diskStorage({
     cb(null, `avatar-${req.user.id}-${uniqueSuffix}${ext}`);
   }
 });
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Seules les images sont acceptées (JPG, PNG, WEBP…)'), false);
+  }
+});
+
+// Configuration Multer pour Excel
+const storageExcel = multer.memoryStorage();
+const uploadExcel = multer({
+  storage: storageExcel,
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.xlsx') cb(null, true);
+    else cb(new Error('Seuls les fichiers Excel (.xlsx) sont acceptés'), false);
   }
 });
 
@@ -51,22 +62,23 @@ router.delete('/auth/avatar', authMiddleware, authCtrl.deleteAvatar);
 router.get('/enseignants', authMiddleware, ensCtrl.getAll);
 router.get('/enseignants/:id', authMiddleware, ensCtrl.getById);
 router.get('/enseignants/:id/heures', authMiddleware, ensCtrl.getHeures);
-router.post('/enseignants', authMiddleware, requireRole('admin','rh'), ensCtrl.create);
-router.put('/enseignants/:id', authMiddleware, requireRole('admin','rh'), ensCtrl.update);
+router.post('/enseignants', authMiddleware, requireRole('admin', 'rh'), ensCtrl.create);
+router.put('/enseignants/:id', authMiddleware, requireRole('admin', 'rh'), ensCtrl.update);
 router.delete('/enseignants/:id', authMiddleware, requireRole('admin'), ensCtrl.delete);
 
 // ---- HEURES ----
 router.get('/heures/pending-count', authMiddleware, heureCtrl.getPendingCount);
 router.get('/heures', authMiddleware, heureCtrl.getAll);
 router.get('/heures/:id', authMiddleware, heureCtrl.getById);
-router.post('/heures', authMiddleware, requireRole('admin','rh'), heureCtrl.create);
-router.put('/heures/:id', authMiddleware, requireRole('admin','rh'), heureCtrl.update);
-router.delete('/heures/:id', authMiddleware, requireRole('admin','rh'), heureCtrl.delete);
-router.patch('/heures/:id/valider', authMiddleware, requireRole('admin','rh'), heureCtrl.valider);
+router.post('/heures', authMiddleware, requireRole('admin', 'rh'), heureCtrl.create);
+router.put('/heures/:id', authMiddleware, requireRole('admin', 'rh'), heureCtrl.update);
+router.delete('/heures/:id', authMiddleware, requireRole('admin', 'rh'), heureCtrl.delete);
+router.patch('/heures/:id/valider', authMiddleware, requireRole('admin', 'rh'), heureCtrl.valider);
 
 // ---- DASHBOARD & RAPPORTS ----
 router.get('/dashboard', authMiddleware, dashCtrl.getDashboard);
-router.get('/rapports/paiement', authMiddleware, requireRole('admin','rh'), dashCtrl.getEtatPaiement);
+router.get('/rapports/paiement', authMiddleware, requireRole('admin', 'rh'), dashCtrl.getEtatPaiement);
+router.post('/rapports/import-excel', authMiddleware, requireRole('admin', 'rh'), uploadExcel.single('file'), dashCtrl.importExcel);
 
 // ---- RÉFÉRENTIELS ----
 router.get('/departements', authMiddleware, refCtrl.getDepartements);
@@ -80,8 +92,8 @@ router.put('/filieres/:id', authMiddleware, requireRole('admin'), refCtrl.update
 router.delete('/filieres/:id', authMiddleware, requireRole('admin'), refCtrl.deleteFiliere);
 
 router.get('/matieres', authMiddleware, refCtrl.getMatieres);
-router.post('/matieres', authMiddleware, requireRole('admin','rh'), refCtrl.createMatiere);
-router.put('/matieres/:id', authMiddleware, requireRole('admin','rh'), refCtrl.updateMatiere);
+router.post('/matieres', authMiddleware, requireRole('admin', 'rh'), refCtrl.createMatiere);
+router.put('/matieres/:id', authMiddleware, requireRole('admin', 'rh'), refCtrl.updateMatiere);
 router.delete('/matieres/:id', authMiddleware, requireRole('admin'), refCtrl.deleteMatiere);
 
 router.get('/annees', authMiddleware, refCtrl.getAnnees);

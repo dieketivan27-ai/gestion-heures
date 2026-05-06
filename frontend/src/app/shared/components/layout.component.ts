@@ -31,9 +31,14 @@ import { Subscription, interval } from 'rxjs';
             <h1 class="text-sm font-bold text-white leading-tight">GestionHeures</h1>
             <p class="text-xs text-slate-500 truncate">Enseignement Supérieur</p>
           </div>
-          <!-- Mobile close button -->
-          <button class="mobile-only text-slate-400 hover:text-white p-1 ml-auto" (click)="showMobileMenu = false">
-            <i class="fas fa-times"></i>
+          
+          <!-- Hamburger in Sidebar: Visible on Desktop (always) and Mobile (when open) -->
+          <button class="hamburger-btn sidebar-hamburger ml-auto" 
+            [class.sidebar-hamburger-collapsed]="sidebarCollapsed"
+            (click)="toggleSidebar()" aria-label="Toggle sidebar">
+            <span class="hamburger-bar" [class.open]="showMobileMenu || !sidebarCollapsed"></span>
+            <span class="hamburger-bar" [class.open]="showMobileMenu || !sidebarCollapsed"></span>
+            <span class="hamburger-bar" [class.open]="showMobileMenu || !sidebarCollapsed"></span>
           </button>
         </div>
 
@@ -129,11 +134,11 @@ import { Subscription, interval } from 'rxjs';
       <div class="main-content">
         <header class="topbar">
           <div class="flex items-center gap-4">
-            <!-- Hamburger: visible on ALL screens -->
-            <button class="hamburger-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">
-              <span class="hamburger-bar" [class.open]="showMobileMenu || !sidebarCollapsed"></span>
-              <span class="hamburger-bar" [class.open]="showMobileMenu || !sidebarCollapsed"></span>
-              <span class="hamburger-bar" [class.open]="showMobileMenu || !sidebarCollapsed"></span>
+            <!-- Hamburger in Topbar: ONLY visible on Mobile when sidebar is CLOSED -->
+            <button class="hamburger-btn lg:hidden" *ngIf="!showMobileMenu" (click)="toggleSidebar()" aria-label="Toggle sidebar">
+              <span class="hamburger-bar"></span>
+              <span class="hamburger-bar"></span>
+              <span class="hamburger-bar"></span>
             </button>
             <div class="topbar-title-wrapper">
               <div class="topbar-icon" *ngIf="!isMobile">
