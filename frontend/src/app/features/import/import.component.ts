@@ -128,6 +128,15 @@ import { ApiService } from '../../core/services/api.service';
                   </td>
                 </tr>
               </tbody>
+              <tfoot *ngIf="totalsRow" class="bg-slate-50 border-t-2 border-slate-200 font-bold">
+                <tr>
+                  <td colspan="2" class="px-4 py-3 text-slate-800">TOTAL</td>
+                  <td class="px-4 py-3 text-center text-slate-800">{{getTotalsValue('cm')}}h</td>
+                  <td class="px-4 py-3 text-center text-slate-800">{{getTotalsValue('td')}}h</td>
+                  <td class="px-4 py-3 text-center text-slate-800">{{getTotalsValue('tp')}}h</td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -163,6 +172,7 @@ export class ImportComponent {
   isDragging = false;
   selectedFile: File | null = null;
   previewData: ExcelImportRow[] = [];
+  totalsRow: any | null = null;
   importing = false;
   importResult: any = null;
 
@@ -212,8 +222,9 @@ export class ImportComponent {
     this.importResult = null;
     
     try {
-      const raw = await this.excelService.parseExcel(file);
-      this.previewData = this.excelService.mapAndValidateData(raw);
+      const { rows, totalsRow } = await this.excelService.parseExcel(file);
+      this.previewData = this.excelService.mapAndValidateData(rows);
+      this.totalsRow = totalsRow;
     } catch (error: any) {
       window.alert(error?.message || error || 'Erreur lors de la lecture du fichier');
     }
@@ -230,15 +241,25 @@ export class ImportComponent {
   reset() {
     this.selectedFile = null;
     this.previewData = [];
+    this.totalsRow = null;
     this.importResult = null;
     if (this.fileInput) this.fileInput.nativeElement.value = '';
   }
 
+  getTotalsValue(type: string): string {
+    if (!this.totalsRow) return '0';
+    // On cherche dynamiquement la clé (CM, TD, TP) dans le totalsRow
+    const keys = Object.keys(this.totalsRow);
+    const foundKey = keys.find(k => k.toLowerCase().includes(type.toLowerCase()));
+    return foundKey ? (this.totalsRow[foundKey] || '0') : '0';
+  }
+
   doImport() {
-    if (!this.selectedFile) return;
-    this.importing = true;
+    const validRows = this.previewData.filter(r => r.isValid);
+    if (validRows.length === 0) return;
     
-    this.api.importExcel(this.selectedFile).subscribe({
+    this.importing = true;
+    this.api.importJson(validRows).subscribe({
       next: (res: any) => {
         this.importing = false;
         this.importResult = res;

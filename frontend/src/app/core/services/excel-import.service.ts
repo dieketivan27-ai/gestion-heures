@@ -21,9 +21,9 @@ export class ExcelImportService {
   constructor() {}
 
   /**
-   * Parse un fichier Excel et retourne un tableau d'objets JSON
+   * Parse un fichier Excel et détecte automatiquement la ligne header (contenant 'Matricule')
    */
-  public parseExcel(file: File): Promise<any[]> {
+  public parseExcel(file: File): Promise<{ rows: any[], totalsRow: any | null }> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e: any) => {
@@ -32,10 +32,67 @@ export class ExcelImportService {
           const workbook = XLSX.read(data, { type: 'array' });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          resolve(jsonData);
+
+          // 1. Lire toutes les lignes brutes (tableau de tableaux)
+          const rawRows: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+            defval: "",
+            blankrows: false
+          });
+
+          // 2. Détecter la ligne qui contient "Matricule" (insensible à la casse)
+          const headerRowIndex = rawRows.findIndex((row) =>
+            row.some(
+              (cell) =>
+                typeof cell === "string" &&
+                cell.trim().toLowerCase() === "matricule"
+            )
+          );
+
+          if (headerRowIndex === -1) {
+            reject("Impossible de trouver la ligne d'en-tête contenant 'Matricule' dans le fichier.");
+            return;
+          }
+
+          // 3. Extraire les headers
+          const headers = rawRows[headerRowIndex].map((h) =>
+            typeof h === "string" ? h.trim() : String(h)
+          );
+
+          // 4. Mapper chaque ligne de données en objet { header: valeur }
+          const dataRows = rawRows.slice(headerRowIndex + 1);
+          const rows: any[] = [];
+
+          for (const row of dataRows) {
+            if (row.every(cell => cell === "")) continue; // ignorer lignes vides
+
+            // Ignorer la ligne TOTAL du fichier (on va la recalculer nous-mêmes)
+            const firstCell = String(row[0] ?? "").trim().toUpperCase();
+            if (firstCell === "TOTAL") continue;
+
+            const obj: any = {};
+            headers.forEach((header, i) => {
+              if (header) obj[header] = row[i] ?? "";
+            });
+
+            rows.push(obj);
+          }
+
+          // 5. Calculer le TOTAL dynamiquement depuis les lignes de données
+          // On cherche les colonnes qui ressemblent à CM, TD, TP
+          const findKey = (h: string[]) => (pattern: string) => h.find(k => k.toLowerCase().includes(pattern.toLowerCase()));
+          const keyCM = findKey(headers)('cm');
+          const keyTD = findKey(headers)('td');
+          const keyTP = findKey(headers)('tp');
+
+          const totalsRow: any = {};
+          if (keyCM) totalsRow[keyCM] = rows.reduce((s, r) => s + (parseFloat(r[keyCM]) || 0), 0);
+          if (keyTD) totalsRow[keyTD] = rows.reduce((s, r) => s + (parseFloat(r[keyTD]) || 0), 0);
+          if (keyTP) totalsRow[keyTP] = rows.reduce((s, r) => s + (parseFloat(r[keyTP]) || 0), 0);
+
+          resolve({ rows, totalsRow });
         } catch (error) {
-          reject('Erreur lors de la lecture du fichier Excel');
+          reject('Erreur lors de la lecture du fichier Excel : ' + error);
         }
       };
       reader.onerror = (error) => reject(error);

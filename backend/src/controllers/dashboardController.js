@@ -276,7 +276,10 @@ exports.importExcel = async (req, res) => {
     // Helper for safely extracting values, handling exceljs formulas
     const getCellValue = (cell) => {
       if (!cell || cell.value === null || cell.value === undefined) return '';
-      if (typeof cell.value === 'object' && cell.value.result !== undefined) return cell.value.result;
+      if (typeof cell.value === 'object') {
+        if (cell.value.result !== undefined) return cell.value.result;
+        return ''; // Évite de retourner l'objet {formula: ...} qui devient [object Object]
+      }
       return cell.value;
     };
 
@@ -284,7 +287,7 @@ exports.importExcel = async (req, res) => {
     for (let i = headerRow.rowNumber + 1; i <= worksheet.rowCount; i++) {
       const row = worksheet.getRow(i);
       const matricule = getCellValue(row.getCell(colMap.matricule || 1))?.toString().trim();
-      if (!matricule) continue;
+      if (!matricule || matricule.toUpperCase() === 'TOTAL') continue;
 
       try {
         const nom = getCellValue(row.getCell(colMap.nom || 2))?.toString().trim();
@@ -388,4 +391,81 @@ exports.importExcel = async (req, res) => {
   } finally {
     if (conn) conn.release();
   }
+};
+
+exports.importJson = async (req, res) => {
+  const { data } = req.body;
+  if (!data || !Array.isArray(data)) return res.status(400).json({ message: 'Données invalides ou manquantes' });
+
+  const conn = await db.getConnection();
+  try {
+    const [annees] = await conn.execute('SELECT id FROM annees_academiques WHERE is_active = TRUE LIMIT 1');
+    const anneeId = annees[0]?.id;
+    if (!anneeId) throw new Error('Aucune année académique active trouvée');
+
+    await conn.beginTransaction();
+    let importedCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    for (const row of data) {
+      const { matricule, nom, grade, statut, departement, heures_cm, heures_td, heures_tp } = row;
+      if (!matricule) continue;
+
+      try {
+        let deptId = null;
+        if (departement) {
+          const [depts] = await conn.execute('SELECT id FROM departements WHERE nom = ? OR code = ?', [departement, departement]);
+          if (depts.length) deptId = depts[0].id;
+          else {
+            const [newDept] = await conn.execute('INSERT INTO departements (nom, code) VALUES (?, ?)', [departement, departement.substring(0, 5).toUpperCase()]);
+            deptId = newDept.insertId;
+          }
+        }
+
+        const [ensRows] = await conn.execute('SELECT id FROM enseignants WHERE matricule = ?', [matricule]);
+        let enseignantId;
+
+        if (ensRows.length) {
+          enseignantId = ensRows[0].id;
+          await conn.execute(
+            'UPDATE enseignants SET nom=?, grade=?, statut=?, departement_id=? WHERE id=?',
+            [nom, grade, statut, deptId, enseignantId]
+          );
+        } else {
+          const tempEmail = `${matricule.toLowerCase()}@import.excel`;
+          const tempPassword = 'Temp' + Math.floor(1000 + Math.random() * 9000);
+          const hash = await bcrypt.hash(tempPassword, 10);
+          const [userRes] = await conn.execute('INSERT INTO users (email, password, role, must_change_password) VALUES (?,?,?,TRUE)', [tempEmail, hash, 'enseignant']);
+          const [newEns] = await conn.execute(
+            `INSERT INTO enseignants (user_id, matricule, nom, prenom, email, grade, statut, departement_id, heures_contractuelles)
+             VALUES (?,?,?,?,?,?,?,?,?)`,
+            [userRes.insertId, matricule, nom, '', tempEmail, grade, statut, deptId, statut === 'Vacataire' ? 0 : 192]
+          );
+          enseignantId = newEns.insertId;
+        }
+
+        await conn.execute('DELETE FROM heures_effectuees WHERE enseignant_id = ? AND annee_academique_id = ? AND observations = "IMPORT_EXCEL"', [enseignantId, anneeId]);
+
+        const seances = [{ t: 'CM', d: parseFloat(heures_cm) }, { t: 'TD', d: parseFloat(heures_td) }, { t: 'TP', d: parseFloat(heures_tp) }];
+        for (const s of seances) {
+          if (s.d > 0) {
+            let eq = s.d;
+            if (s.t === 'TD') eq = s.d * 0.66; else if (s.t === 'TP') eq = s.d * 0.5;
+            await conn.execute(
+              `INSERT INTO heures_effectuees (enseignant_id, annee_academique_id, date_cours, type_heure, duree, duree_equivalente, valide, observations)
+               VALUES (?, ?, CURDATE(), ?, ?, ?, TRUE, "IMPORT_EXCEL")`,
+              [enseignantId, anneeId, s.t, s.d, eq]
+            );
+          }
+        }
+        importedCount++;
+      } catch (e) { errorCount++; errors.push(`${matricule}: ${e.message}`); }
+    }
+    await conn.commit();
+    res.json({ importedCount, errorCount, errors });
+  } catch (err) {
+    if (conn) await conn.rollback();
+    res.status(500).json({ message: err.message });
+  } finally { if (conn) conn.release(); }
 };
