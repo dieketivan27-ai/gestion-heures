@@ -19,10 +19,12 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
         </h1>
         <p class="text-sm text-slate-500 mt-0.5">{{filtered.length}} enseignant(s) enregistré(s)</p>
       </div>
-      <button *ngIf="isRH" (click)="openModal()"
-        class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors">
-        <i class="fas fa-plus"></i> Ajouter
-      </button>
+      <div class="flex items-center gap-2">
+        <button *ngIf="isRH" (click)="openModal()"
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors shadow-sm shadow-blue-200">
+          <i class="fas fa-plus"></i> Ajouter
+        </button>
+      </div>
     </div>
 
     <!-- FILTRES -->

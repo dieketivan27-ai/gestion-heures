@@ -32,16 +32,6 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
           <option value="ALL">Toutes les années</option>
           <option *ngFor="let a of annees" [value]="a.id">{{a.libelle}}</option>
         </select>
-        <div class="relative overflow-hidden inline-block" *ngIf="!isTeacher">
-          <button class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-            [class.opacity-50]="loading || importing">
-            <i class="fas" [ngClass]="importing ? 'fa-spinner fa-spin' : 'fa-upload'"></i> 
-            {{ importing ? 'Importation...' : 'Importer Excel' }}
-          </button>
-          <input type="file" (change)="onFileSelected($event)" accept=".xlsx, .xls, .csv" 
-            class="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-            [disabled]="loading || importing">
-        </div>
 
         <button *ngIf="!isTeacher" (click)="exportExcel()" [disabled]="!data.length"
           class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium transition-colors">
@@ -54,31 +44,6 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
       </div>
     </div>
 
-    <!-- Import Results -->
-    <div *ngIf="importResult" class="mb-5 p-4 rounded-xl border animate-in fade-in slide-in-from-top-4 duration-300"
-      [ngClass]="importResult.errorCount > 0 ? 'bg-amber-50 border-amber-100' : 'bg-emerald-50 border-emerald-100'">
-      <div class="flex items-start gap-3">
-        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-          [ngClass]="importResult.errorCount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'">
-          <i class="fas" [ngClass]="importResult.errorCount > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle'"></i>
-        </div>
-        <div class="flex-1">
-          <h3 class="font-bold text-slate-800">{{importResult.message}}</h3>
-          <p class="text-sm text-slate-600 mt-1">
-            <span class="font-bold text-emerald-600">{{importResult.importedCount}}</span> lignes importées avec succès.
-            <span *ngIf="importResult.errorCount > 0" class="ml-2 font-bold text-red-500">{{importResult.errorCount}}</span> 
-            <span *ngIf="importResult.errorCount > 0">erreurs détectées.</span>
-          </p>
-          <ul *ngIf="importResult.errors?.length" class="mt-2 text-xs text-red-600 list-disc list-inside">
-            <li *ngFor="let err of importResult.errors.slice(0, 5)">{{err}}</li>
-            <li *ngIf="importResult.errors.length > 5">Et {{importResult.errors.length - 5}} autres erreurs...</li>
-          </ul>
-        </div>
-        <button (click)="importResult = null" class="text-slate-400 hover:text-slate-600 p-1">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-    </div>
 
     <!-- Stat Summary -->
     <div class="grid grid-cols-3 gap-4 mb-5" *ngIf="data.length">
@@ -254,8 +219,6 @@ export class RapportsComponent implements OnInit {
   annees: AnneeAcademique[] = [];
   selectedAnnee: number | null = null;
   loading = false;
-  importing = false;
-  importResult: any = null;
   view: 'global' | 'compta' = 'global';
 
   constructor(
@@ -338,43 +301,6 @@ export class RapportsComponent implements OnInit {
       error: err => {
         console.error('[RapportsComponent] API error:', err);
         alert('Erreur lors du téléchargement : ' + (err.message || err.status));
-      }
-    });
-  }
-
-  onFileSelected(event: any) {
-    const file = event.target.files[0];
-    console.log('[Rapports] Fichier sélectionné:', file?.name);
-    
-    if (!file) {
-      console.log('[Rapports] Aucun fichier sélectionné');
-      return;
-    }
-
-    const fileName = file.name.toLowerCase();
-    if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls') && !fileName.endsWith('.csv')) {
-      alert('Veuillez sélectionner un fichier Excel (.xlsx, .xls, .csv)');
-      event.target.value = '';
-      return;
-    }
-
-    this.importing = true;
-    this.importResult = null;
-
-    console.log('[Rapports] Début de l\'envoi...');
-    this.api.importExcel(file).subscribe({
-      next: res => {
-        console.log('[Rapports] Réponse reçue:', res);
-        this.importing = false;
-        this.importResult = res;
-        this.load(); 
-        if (event.target) event.target.value = ''; 
-      },
-      error: err => {
-        console.error('[Rapports] Erreur d\'importation:', err);
-        this.importing = false;
-        alert('Erreur lors de l\'importation : ' + (err.error?.message || err.message));
-        if (event.target) event.target.value = '';
       }
     });
   }

@@ -86,10 +86,17 @@ import { Subscription, interval } from 'rxjs';
             </div>
             <a routerLink="/rapports" routerLinkActive="active"
                class="sidebar-link"
-               [title]="sidebarCollapsed ? 'États & Exports' : ''"
+               [title]="sidebarCollapsed ? 'Rapports' : ''"
                (click)="showMobileMenu = false">
               <i class="fas fa-file-alt sidebar-link-icon"></i>
-              <span class="sidebar-link-label">États &amp; Exports</span>
+              <span class="sidebar-link-label">États & Rapports</span>
+            </a>
+            <a routerLink="/import" routerLinkActive="active"
+               class="sidebar-link"
+               [title]="sidebarCollapsed ? 'Importation' : ''"
+               (click)="showMobileMenu = false">
+              <i class="fas fa-file-import sidebar-link-icon"></i>
+              <span class="sidebar-link-label">Importation Excel</span>
             </a>
           </div>
 
@@ -271,6 +278,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
     else if (url.includes('heures')) this.pageTitle = 'Heures effectuées';
     else if (url.includes('matieres')) this.pageTitle = 'Gestion des matières';
     else if (url.includes('rapports')) this.pageTitle = 'États & Rapports';
+    else if (url.includes('import')) this.pageTitle = 'Importation de données';
     else if (url.includes('parametres')) this.pageTitle = 'Paramètres système';
     else if (url.includes('utilisateurs')) this.pageTitle = 'Gestion des utilisateurs';
     else if (url.includes('profile')) this.pageTitle = 'Mon Profil';
