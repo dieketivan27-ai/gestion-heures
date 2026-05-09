@@ -41,6 +41,21 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
           class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-medium transition-colors">
           <i class="fas fa-file-pdf"></i> PDF Global
         </button>
+
+        <div class="h-8 w-px bg-slate-200 mx-1" *ngIf="!isTeacher"></div>
+
+        <div class="flex items-center gap-2" *ngIf="!isTeacher">
+          <select class="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]" 
+            [(ngModel)]="selectedTeacherId">
+            <option [ngValue]="null">Choisir enseignant...</option>
+            <option *ngFor="let r of data" [ngValue]="r.id">{{r.nom}} {{r.prenom}}</option>
+          </select>
+          <button (click)="exportIndividuel(selectedTeacherId!)" [disabled]="!selectedTeacherId"
+            class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+            title="Télécharger la fiche individuelle">
+            <i class="fas fa-user-tag"></i> Fiche
+          </button>
+        </div>
       </div>
     </div>
 
@@ -218,6 +233,7 @@ export class RapportsComponent implements OnInit {
   data: any[] = [];
   annees: AnneeAcademique[] = [];
   selectedAnnee: number | null = null;
+  selectedTeacherId: number | null = null;
   loading = false;
   view: 'global' | 'compta' = 'global';
 
@@ -243,6 +259,7 @@ export class RapportsComponent implements OnInit {
     this.api.getEtatPaiement(this.selectedAnnee || undefined).subscribe({
       next: d => {
         this.data = d;
+        this.selectedTeacherId = null;
         this.loading = false;
       },
       error: () => this.loading = false

@@ -63,7 +63,8 @@ export class ExportService {
       headStyles: { fillColor: [66, 99, 235] }
     });
 
-    doc.save(`rapport_${view}_${anneeLibelle}.pdf`);
+    const safeAnnee = (anneeLibelle || 'N/A').replace(/\//g, '-');
+    doc.save(`rapport_${view}_${safeAnnee}.pdf`);
   }
 
   /**
@@ -132,6 +133,7 @@ export class ExportService {
       margin: { top: 75 }
     });
 
-    doc.save(`fiche_${e.nom}_${anneeLibelle}.pdf`);
+    const safeAnnee = (anneeLibelle || 'N/A').replace(/\//g, '-');
+    doc.save(`fiche_${e.nom}_${safeAnnee}.pdf`);
   }
 }
