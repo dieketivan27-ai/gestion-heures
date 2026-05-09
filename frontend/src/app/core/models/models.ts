@@ -7,6 +7,8 @@ export interface User {
   telephone?: string;
   avatar_url?: string | null;
   enseignant_id?: number;
+  is_active: boolean;
+  created_at?: string;
   must_change_password?: boolean;
 }
 

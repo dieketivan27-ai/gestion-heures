@@ -104,8 +104,15 @@ router.delete('/annees/:id', authMiddleware, requireRole('admin'), refCtrl.delet
 router.get('/parametres', authMiddleware, refCtrl.getParametres);
 router.put('/parametres/:cle', authMiddleware, requireRole('admin'), refCtrl.updateParametre);
 
-router.get('/users', authMiddleware, requireRole('admin'), refCtrl.getUsers);
-router.patch('/users/:id/toggle', authMiddleware, requireRole('admin'), refCtrl.toggleUser);
+const userCtrl = require('../controllers/userController');
+
+// ---- USERS (admin) ----
+router.get('/users', authMiddleware, requireRole('admin'), userCtrl.getUsers);
+router.post('/users', authMiddleware, requireRole('admin'), userCtrl.createUser);
+router.put('/users/:id', authMiddleware, requireRole('admin'), userCtrl.updateUser);
+router.delete('/users/:id', authMiddleware, requireRole('admin'), userCtrl.deleteUser);
+router.patch('/users/:id/toggle', authMiddleware, requireRole('admin'), userCtrl.toggleStatus);
+
 router.get('/logs', authMiddleware, requireRole('admin'), refCtrl.getLogs);
 
 module.exports = router;

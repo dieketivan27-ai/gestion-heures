@@ -1,5 +1,5 @@
 import { Router, Routes } from '@angular/router';
-import { authGuard } from './core/guards/auth.guard';
+import { authGuard, adminGuard } from './core/guards/auth.guard';
 import { passwordChangeGuard } from './core/guards/password-change.guard';
 import { inject } from '@angular/core';
 import { AuthService } from './core/services/auth.service';
@@ -26,6 +26,10 @@ export const routes: Routes = [
       { path: 'rapports', loadComponent: () => import('./features/rapports/rapports.component').then(m => m.RapportsComponent) },
       { path: 'parametres', loadComponent: () => import('./features/parametres/parametres.component').then(m => m.ParametresComponent) },
       { path: 'profile', loadComponent: () => import('./features/profile/profile.component').then(m => m.ProfileComponent) },
+      { path: 'utilisateurs', 
+        loadComponent: () => import('./features/utilisateurs/utilisateurs.component').then(m => m.UtilisateursComponent),
+        canActivate: [adminGuard]
+      },
     ]
   },
   { path: '**', redirectTo: '' }
