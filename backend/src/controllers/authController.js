@@ -63,6 +63,11 @@ exports.login = async (req, res) => {
 
 exports.changePassword = async (req, res) => {
   const { oldPassword, newPassword } = req.body;
+  
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ message: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
+  }
+
   try {
     const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [req.user.id]);
     if (!rows.length) return res.status(404).json({ message: 'Utilisateur introuvable' });

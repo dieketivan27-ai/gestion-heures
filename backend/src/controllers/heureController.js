@@ -87,6 +87,12 @@ exports.getById = async (req, res) => {
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Heure introuvable' });
+    
+    // Protection IDOR : un enseignant ne peut voir que ses propres heures
+    if (req.user.role === 'enseignant' && parseInt(rows[0].enseignant_id) !== parseInt(req.user.enseignant_id)) {
+      return res.status(403).json({ message: 'Accès interdit - Vous ne pouvez consulter que vos propres heures.' });
+    }
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });

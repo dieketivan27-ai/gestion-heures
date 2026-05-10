@@ -66,7 +66,7 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
     message: 'Erreur interne du serveur',
-    error: err.message
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur inattendue est survenue.'
   });
 });
 
