@@ -15,12 +15,26 @@ import { ApiService } from '../../core/services/api.service';
             <h3 class="modal-title text-lg font-bold text-slate-800">Importation Enseignants (Excel)</h3>
             <p class="text-xs text-slate-400 mt-0.5">Sélectionnez un fichier .xlsx pour importer des données en masse</p>
           </div>
-          <button (click)="close()" class="text-slate-400 hover:text-slate-600 transition-colors">
+          <button (click)="close()" [disabled]="importing" class="text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-30">
             <i class="fas fa-times text-lg"></i>
           </button>
         </div>
 
         <div class="modal-body p-6 max-h-[70vh] overflow-y-auto">
+          <!-- Alerte d'erreur -->
+          <div *ngIf="globalError" class="mb-5 bg-red-50 border border-red-100 rounded-xl p-4 flex items-start gap-3 animate-shake">
+            <div class="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center shrink-0">
+              <i class="fas fa-exclamation-triangle text-sm"></i>
+            </div>
+            <div class="flex-1">
+              <h4 class="text-sm font-bold text-red-800">Une erreur est survenue</h4>
+              <p class="text-xs text-red-600/80 leading-relaxed mt-0.5">{{globalError}}</p>
+            </div>
+            <button (click)="clearError()" class="text-red-400 hover:text-red-600 transition-colors">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+
           <!-- Zone de Drop / Sélection -->
           <div *ngIf="!previewData.length" 
                class="border-2 border-dashed border-slate-200 rounded-2xl p-12 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer group"
@@ -37,7 +51,7 @@ import { ApiService } from '../../core/services/api.service';
           <div *ngIf="previewData.length">
             <div class="flex items-center justify-between mb-4">
               <span class="text-sm font-bold text-slate-700">{{previewData.length}} lignes détectées</span>
-              <button (click)="reset()" class="text-xs text-red-500 hover:underline">Changer de fichier</button>
+              <button (click)="reset()" [disabled]="importing" class="text-xs text-red-500 hover:underline disabled:opacity-30">Changer de fichier</button>
             </div>
 
             <div class="bg-slate-50 rounded-xl border border-slate-100 overflow-hidden">
@@ -83,7 +97,7 @@ import { ApiService } from '../../core/services/api.service';
         </div>
 
         <div class="modal-footer border-t border-slate-100 p-5 bg-slate-50/30 flex justify-end gap-3 rounded-b-xl">
-          <button (click)="close()" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors">Annuler</button>
+          <button (click)="close()" [disabled]="importing" class="px-4 py-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-30">Annuler</button>
           <button *ngIf="previewData.length" 
                   [disabled]="!canImport || importing"
                   (click)="doImport()"
@@ -106,6 +120,16 @@ import { ApiService } from '../../core/services/api.service';
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    
+    .animate-shake {
+      animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+    }
+    @keyframes shake {
+      10%, 90% { transform: translate3d(-1px, 0, 0); }
+      20%, 80% { transform: translate3d(2px, 0, 0); }
+      30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+      40%, 60% { transform: translate3d(4px, 0, 0); }
+    }
   `]
 })
 export class ExcelImportModalComponent {
@@ -115,6 +139,7 @@ export class ExcelImportModalComponent {
   previewData: ExcelImportRow[] = [];
   importing = false;
   selectedFile: File | null = null;
+  globalError: string | null = null;
 
   constructor(
     private excelService: ExcelImportService,
@@ -124,18 +149,26 @@ export class ExcelImportModalComponent {
   async onFileChange(event: any) {
     const file = event.target.files[0];
     if (!file) return;
+    
+    this.reset(); // On réinitialise tout au début d'un nouvel import
     this.selectedFile = file;
     
     try {
-      const raw = await this.excelService.parseExcel(file);
-      this.previewData = this.excelService.mapAndValidateData(raw);
-    } catch (error) {
-      alert(error);
+      const result = await this.excelService.parseExcel(file);
+      this.previewData = this.excelService.mapAndValidateData(result.rows);
+      
+      if (this.previewData.length === 0) {
+        this.globalError = "Le fichier semble vide ou ne contient aucune donnée valide.";
+      }
+    } catch (error: any) {
+      console.error('Excel parse error:', error);
+      this.globalError = typeof error === 'string' ? error : (error.message || "Erreur lors de la lecture du fichier Excel.");
+      this.previewData = [];
     }
   }
 
   get canImport(): boolean {
-    return this.previewData.some(r => r.isValid);
+    return this.previewData.some(r => r.isValid) && !this.importing;
   }
 
   get validCount(): number {
@@ -143,27 +176,38 @@ export class ExcelImportModalComponent {
   }
 
   close() {
+    if (this.importing) return;
     this.closed.emit();
   }
 
   reset() {
     this.previewData = [];
     this.selectedFile = null;
+    this.globalError = null;
+    this.importing = false;
+  }
+
+  clearError() {
+    this.globalError = null;
   }
 
   doImport() {
-    if (!this.selectedFile) return;
-    this.importing = true;
+    const validData = this.previewData.filter(r => r.isValid);
+    if (!validData.length || this.importing) return;
     
-    // On utilise l'API backend existante qui accepte le fichier multipart
-    this.api.importExcel(this.selectedFile).subscribe({
+    this.importing = true;
+    this.globalError = null;
+    
+    // On envoie uniquement les lignes valides sous forme de JSON
+    this.api.importJson(validData).subscribe({
       next: (res) => {
         this.importing = false;
         this.imported.emit(res);
       },
       error: (err) => {
         this.importing = false;
-        alert('Erreur lors de l\'importation : ' + (err.error?.message || err.message));
+        console.error('Import error:', err);
+        this.globalError = err.error?.message || err.message || "Une erreur inconnue est survenue lors de l'importation.";
       }
     });
   }
