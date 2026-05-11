@@ -354,7 +354,7 @@ export class EnseignantsComponent implements OnInit {
   openModal(e?: Enseignant) {
     this.editing = e || null;
     this.formError = ''; this.submitted = false;
-    
+
     if (e) {
       this.form.patchValue({
         matricule: e.matricule || '',
@@ -382,14 +382,14 @@ export class EnseignantsComponent implements OnInit {
         matieres: []
       });
     }
-    
+
     this.showModal = true;
   }
 
   onStatutChange() {
     const statut = this.form.get('statut')?.value;
     const heures = this.form.get('heures_contractuelles')?.value;
-    
+
     if (statut === 'Vacataire') {
       this.form.get('heures_contractuelles')?.setValue(0);
     } else if (statut === 'Permanent' && (!heures || heures === 0)) {
@@ -401,13 +401,13 @@ export class EnseignantsComponent implements OnInit {
 
   save() {
     this.submitted = true;
-    if (this.form.invalid) { 
-      this.formError = 'Veuillez remplir les champs obligatoires correctement'; 
-      return; 
+    if (this.form.invalid) {
+      this.formError = 'Veuillez remplir les champs obligatoires correctement';
+      return;
     }
     this.saving = true; this.formError = '';
     const formValue = this.form.value;
-    
+
     const req = this.editing
       ? this.api.updateEnseignant(this.editing.id, formValue)
       : this.api.createEnseignant(formValue);
