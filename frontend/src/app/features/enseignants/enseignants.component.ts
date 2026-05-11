@@ -12,6 +12,45 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
   selector: 'app-enseignants',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AvatarComponent, NgSelectModule],
+  styles: [`
+    .custom-ng-select .ng-select-container {
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 4px;
+      min-height: 48px;
+    }
+    .custom-ng-select.ng-select-focused .ng-select-container {
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+    .segmented-control {
+      background: #f1f5f9;
+      padding: 4px;
+      display: flex;
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .segmented-control button {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 0.5rem;
+      transition: all 0.2s;
+    }
+    .segmented-control button.active {
+      background: white;
+      color: #4f46e5;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .segmented-control button:not(.active) {
+      color: #64748b;
+    }
+    .segmented-control button:not(.active):hover {
+      color: #334155;
+      background: #e2e8f0;
+    }
+  `],
   template: `
     <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
       <div>
@@ -196,20 +235,22 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
               <label class="form-label font-semibold text-slate-700 flex items-center gap-2 mb-2">
                 <i class="fas fa-book text-indigo-500"></i> Attribution des matières par semestre
               </label>
-              <div class="border border-slate-200 rounded-xl overflow-hidden">
-                <!-- Onglets S1 / S2 -->
-                <div class="flex border-b border-slate-200 bg-slate-50">
+              <div class="border border-slate-100 rounded-2xl bg-slate-50/50 p-1 mb-3">
+                <!-- Onglets S1 / S2 (Segmented Control style) -->
+                <div class="segmented-control">
                   <button type="button" (click)="activeSemestre='S1'"
-                    [class]="activeSemestre==='S1' ? 'flex-1 py-2 text-sm font-bold text-indigo-600 bg-white border-b-2 border-indigo-500' : 'flex-1 py-2 text-sm text-slate-500 hover:bg-white transition-colors'">
+                    [class.active]="activeSemestre==='S1'">
                     Semestre 1
                   </button>
                   <button type="button" (click)="activeSemestre='S2'"
-                    [class]="activeSemestre==='S2' ? 'flex-1 py-2 text-sm font-bold text-indigo-600 bg-white border-b-2 border-indigo-500' : 'flex-1 py-2 text-sm text-slate-500 hover:bg-white transition-colors'">
+                    [class.active]="activeSemestre==='S2'">
                     Semestre 2
                   </button>
                 </div>
+              </div>
+              <div class="rounded-xl bg-white">
                 <!-- Contenu onglet S1 -->
-                <div class="p-3" *ngIf="activeSemestre==='S1'">
+                <div class="py-2" *ngIf="activeSemestre==='S1'">
                   <ng-select
                     [items]="matieresList"
                     bindLabel="intitule"
@@ -222,7 +263,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
                   </ng-select>
                 </div>
                 <!-- Contenu onglet S2 -->
-                <div class="p-3" *ngIf="activeSemestre==='S2'">
+                <div class="py-2" *ngIf="activeSemestre==='S2'">
                   <ng-select
                     [items]="matieresList"
                     bindLabel="intitule"
@@ -235,7 +276,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
                   </ng-select>
                 </div>
                 <!-- Récap -->
-                <div class="px-3 pb-3 text-xs text-slate-400 flex gap-4">
+                <div class="text-xs text-slate-400 flex gap-4 border-t border-slate-100 pt-3 mt-1">
                   <span><i class="fas fa-check-circle text-indigo-400"></i> S1: {{matieresSemestre.s1.length}} matière(s)</span>
                   <span><i class="fas fa-check-circle text-indigo-400"></i> S2: {{matieresSemestre.s2.length}} matière(s)</span>
                 </div>

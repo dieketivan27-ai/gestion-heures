@@ -159,7 +159,7 @@ export class AdminAttributionsComponent implements OnInit {
   enseignants: any[] = [];
   matieres: any[] = [];
   attributions: any[] = [];
-  semestres = ['S1', 'S2', 'S3', 'S4'];
+  semestres = ['S1', 'S2'];
 
   attrForm: FormGroup;
   saving = false;

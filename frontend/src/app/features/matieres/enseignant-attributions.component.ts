@@ -9,10 +9,23 @@ import { map, Observable, BehaviorSubject, combineLatest, switchMap, of, tap, ca
 
 registerLocaleData(localeFr);
 
+import { Pipe, PipeTransform } from '@angular/core';
+
+@Pipe({
+  name: 'filterAccepted',
+  standalone: true
+})
+export class FilterAcceptedPipe implements PipeTransform {
+  transform(items: Attribution[] | null): Attribution[] {
+    if (!items) return [];
+    return items.filter(item => item.statut === 'ACCEPTEE');
+  }
+}
+
 @Component({
   selector: 'app-enseignant-attributions',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, FilterAcceptedPipe],
   template: `
     <div class="container mx-auto p-4 max-w-5xl">
       <div class="flex items-center justify-between mb-8">
@@ -36,13 +49,24 @@ registerLocaleData(localeFr);
       </div>
 
       <!-- Navigation par Semestre -->
-      <div class="flex p-1 bg-gray-100 rounded-2xl mb-8 shadow-inner max-w-md">
-        <button *ngFor="let s of semestres" 
-          (click)="onSemestreChange(s)"
-          [ngClass]="selectedSemestre === s ? 'bg-white text-indigo-600 shadow-md scale-105' : 'text-gray-500 hover:text-gray-700'"
-          class="flex-1 py-3 px-1 text-center rounded-xl font-black text-xs transition-all uppercase tracking-widest">
-          {{ s }}
-        </button>
+      <div class="flex items-center justify-between mb-8 gap-4 flex-wrap">
+        <div class="flex p-1 bg-gray-100 rounded-2xl shadow-inner w-full sm:w-auto">
+          <button *ngFor="let s of semestres" 
+            (click)="onSemestreChange(s)"
+            [ngClass]="selectedSemestre === s ? 'bg-white text-indigo-600 shadow-md scale-105' : 'text-gray-500 hover:text-gray-700'"
+            class="flex-1 sm:flex-none sm:w-32 py-3 px-1 text-center rounded-xl font-black text-xs transition-all uppercase tracking-widest">
+            {{ s }}
+          </button>
+        </div>
+        
+        <div class="flex gap-2">
+          <div class="bg-emerald-50 px-4 py-2 rounded-2xl border border-emerald-100 flex items-center gap-2">
+            <i class="fas fa-check-circle text-emerald-500"></i>
+            <span class="text-emerald-700 font-bold text-xs uppercase tracking-wider">
+              {{ (acceptedCount$ | async) }} Matières validées
+            </span>
+          </div>
+        </div>
       </div>
 
       <!-- Liste des attributions -->
@@ -141,16 +165,54 @@ registerLocaleData(localeFr);
           </div>
         </div>
       </div>
+      <!-- Mes Matières (Résumé Liste) -->
+      <div *ngIf="(acceptedCount$ | async) !== 0" class="mt-16 animate-fadeIn">
+        <h2 class="text-2xl font-black text-gray-900 mb-6 flex items-center gap-3">
+          <i class="fas fa-list-ul text-indigo-500"></i> Liste récapitulative de mes matières
+        </h2>
+        <div class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+          <table class="w-full text-left">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-100">
+                <th class="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Matière</th>
+                <th class="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Semestre</th>
+                <th class="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Heures</th>
+                <th class="px-8 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Statut</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              <tr *ngFor="let a of (attributions$ | async) | filterAccepted" class="hover:bg-gray-50/50 transition-colors">
+                <td class="px-8 py-5">
+                  <div class="font-black text-gray-900">{{ a.matiere_nom }}</div>
+                  <div class="text-[10px] text-indigo-500 font-bold uppercase tracking-tighter">{{ a.matiere_code }}</div>
+                </td>
+                <td class="px-8 py-5 text-center">
+                  <span class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg font-black text-[10px] uppercase">{{ a.semestre }}</span>
+                </td>
+                <td class="px-8 py-5 text-center font-bold text-gray-600 text-sm">
+                  {{ a.heuresTotal }}h
+                </td>
+                <td class="px-8 py-5 text-center">
+                   <div class="flex items-center justify-center gap-1.5 text-emerald-500 font-black text-[10px] uppercase">
+                     <i class="fas fa-check-circle"></i> Validée
+                   </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   `
 })
 export class EnseignantAttributionsComponent implements OnInit {
-  semestres: ('S1' | 'S2' | 'S3' | 'S4')[] = ['S1', 'S2', 'S3', 'S4'];
-  selectedSemestre: 'S1' | 'S2' | 'S3' | 'S4' = 'S1';
+  semestres: ('S1' | 'S2')[] = ['S1', 'S2'];
+  selectedSemestre: 'S1' | 'S2' = 'S1';
   
   private refresh$ = new BehaviorSubject<void>(undefined);
   attributions$: Observable<Attribution[]>;
   filteredAttributions$: Observable<Attribution[]>;
+  acceptedCount$: Observable<number>;
   
   loading = true;
   processing = false;
@@ -189,6 +251,10 @@ export class EnseignantAttributionsComponent implements OnInit {
     this.filteredAttributions$ = this.attributions$.pipe(
       map(atts => atts.filter(a => a.semestre === this.selectedSemestre))
     );
+
+    this.acceptedCount$ = this.attributions$.pipe(
+      map(atts => atts.filter(a => a.statut === 'ACCEPTEE').length)
+    );
   }
 
   ngOnInit(): void {}
@@ -197,7 +263,7 @@ export class EnseignantAttributionsComponent implements OnInit {
     this.refresh$.next();
   }
 
-  onSemestreChange(s: 'S1' | 'S2' | 'S3' | 'S4') {
+  onSemestreChange(s: 'S1' | 'S2') {
     this.selectedSemestre = s;
     this.refresh$.next();
   }
