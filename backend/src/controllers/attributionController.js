@@ -91,10 +91,12 @@ exports.respondToAttribution = async (req, res) => {
  * Récupérer toutes les attributions (Admin/RH)
  */
 exports.getAllAttributions = async (req, res) => {
-  const { annee_id, enseignant_id, statut } = req.query;
+  const { annee_id, enseignant_id, statut, semestre } = req.query;
   
   let query = `
-    SELECT a.*, e.nom as enseignant_nom, e.prenom as enseignant_prenom, m.intitule as matiere_nom, aa.libelle as annee_libelle
+    SELECT a.*, e.nom as enseignant_nom, e.prenom as enseignant_prenom, 
+           m.intitule as matiere_nom, m.code as matiere_code,
+           aa.libelle as annee_libelle
     FROM attributions_matieres a
     JOIN enseignants e ON a.enseignant_id = e.id
     JOIN matieres m ON a.matiere_id = m.id
@@ -106,6 +108,7 @@ exports.getAllAttributions = async (req, res) => {
   if (annee_id) { query += ' AND a.annee_academique_id = ?'; params.push(annee_id); }
   if (enseignant_id) { query += ' AND a.enseignant_id = ?'; params.push(enseignant_id); }
   if (statut) { query += ' AND a.statut = ?'; params.push(statut); }
+  if (semestre) { query += ' AND a.semestre = ?'; params.push(semestre); }
 
   query += ' ORDER BY a.date_attribution DESC';
 
@@ -121,17 +124,26 @@ exports.getAllAttributions = async (req, res) => {
  * Créer une nouvelle attribution (Admin/RH)
  */
 exports.createAttribution = async (req, res) => {
-  const { enseignant_id, matiere_id, annee_academique_id, semestre, heures_total } = req.body;
+  let { enseignant_id, matiere_id, annee_academique_id, semestre, heures_total } = req.body;
 
   try {
+    // Auto-résoudre l'année active si non fournie
+    if (!annee_academique_id) {
+      const [[activeYear]] = await db.execute('SELECT id FROM annees_academiques WHERE is_active = 1 LIMIT 1');
+      if (!activeYear) return res.status(400).json({ message: "Aucune année académique active." });
+      annee_academique_id = activeYear.id;
+    }
+
     const [result] = await db.execute(
-      'INSERT INTO attributions_matieres (enseignant_id, matiere_id, annee_academique_id, semestre, heures_total, statut) VALUES (?, ?, ?, ?, ?, "EN_ATTENTE")',
-      [enseignant_id, matiere_id, annee_academique_id, semestre, heures_total || 0]
+      `INSERT INTO attributions_matieres (enseignant_id, matiere_id, annee_academique_id, semestre, heures_total, statut)
+       VALUES (?, ?, ?, ?, ?, 'EN_ATTENTE')
+       ON DUPLICATE KEY UPDATE semestre = VALUES(semestre), heures_total = VALUES(heures_total), statut = 'EN_ATTENTE'`,
+      [enseignant_id, matiere_id, annee_academique_id, semestre || 'S1', heures_total || 0]
     );
 
     await auditLog(req.user.id, 'CREATE', 'attributions_matieres', result.insertId, req.body, req.ip);
 
-    res.status(201).json({ id: result.insertId, message: 'Attribution créée et envoyée à l\'enseignant.' });
+    res.status(201).json({ id: result.insertId, message: "Attribution créée et envoyée à l'enseignant." });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }

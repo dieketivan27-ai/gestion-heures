@@ -96,6 +96,18 @@ export class ApiService {
   updateParametre(cle: string, valeur: string): Observable<any> { return this.http.put(`${this.base}/parametres/${cle}`, { valeur }); }
 
   getUsers(): Observable<any[]> { return this.http.get<any[]>(`${this.base}/users`); }
+  createUser(data: any): Observable<any> { return this.http.post(`${this.base}/users`, data); }
+  updateUser(id: number, data: any): Observable<any> { return this.http.put(`${this.base}/users/${id}`, data); }
+  deleteUser(id: number): Observable<any> { return this.http.delete(`${this.base}/users/${id}`); }
   toggleUser(id: number): Observable<any> { return this.http.patch(`${this.base}/users/${id}/toggle`, {}); }
   getLogs(): Observable<any[]> { return this.http.get<any[]>(`${this.base}/logs`); }
+
+  // ATTRIBUTIONS
+  getAttributions(filters?: any): Observable<any[]> {
+    const params = this.buildFilters(filters);
+    return this.http.get<any[]>(`${this.base}/attributions`, { params });
+  }
+  createAttribution(data: { enseignant_id: number; matiere_id: number; semestre: string; heures_total?: number }): Observable<any> {
+    return this.http.post(`${this.base}/attributions`, data);
+  }
 }

@@ -193,16 +193,53 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
               </select>
             </div>
             <div class="form-group col-span-full">
-              <label class="form-label">Matières</label>
-              <ng-select
-                [items]="matieresList"
-                bindLabel="intitule"
-                bindValue="id"
-                [multiple]="true"
-                placeholder="Sélectionner une ou plusieurs matières"
-                formControlName="matieres"
-                class="custom-ng-select">
-              </ng-select>
+              <label class="form-label font-semibold text-slate-700 flex items-center gap-2 mb-2">
+                <i class="fas fa-book text-indigo-500"></i> Attribution des matières par semestre
+              </label>
+              <div class="border border-slate-200 rounded-xl overflow-hidden">
+                <!-- Onglets S1 / S2 -->
+                <div class="flex border-b border-slate-200 bg-slate-50">
+                  <button type="button" (click)="activeSemestre='S1'"
+                    [class]="activeSemestre==='S1' ? 'flex-1 py-2 text-sm font-bold text-indigo-600 bg-white border-b-2 border-indigo-500' : 'flex-1 py-2 text-sm text-slate-500 hover:bg-white transition-colors'">
+                    Semestre 1
+                  </button>
+                  <button type="button" (click)="activeSemestre='S2'"
+                    [class]="activeSemestre==='S2' ? 'flex-1 py-2 text-sm font-bold text-indigo-600 bg-white border-b-2 border-indigo-500' : 'flex-1 py-2 text-sm text-slate-500 hover:bg-white transition-colors'">
+                    Semestre 2
+                  </button>
+                </div>
+                <!-- Contenu onglet S1 -->
+                <div class="p-3" *ngIf="activeSemestre==='S1'">
+                  <ng-select
+                    [items]="matieresList"
+                    bindLabel="intitule"
+                    bindValue="id"
+                    [multiple]="true"
+                    placeholder="Choisir les matières du Semestre 1..."
+                    [(ngModel)]="matieresSemestre.s1"
+                    [ngModelOptions]="{standalone: true}"
+                    class="custom-ng-select">
+                  </ng-select>
+                </div>
+                <!-- Contenu onglet S2 -->
+                <div class="p-3" *ngIf="activeSemestre==='S2'">
+                  <ng-select
+                    [items]="matieresList"
+                    bindLabel="intitule"
+                    bindValue="id"
+                    [multiple]="true"
+                    placeholder="Choisir les matières du Semestre 2..."
+                    [(ngModel)]="matieresSemestre.s2"
+                    [ngModelOptions]="{standalone: true}"
+                    class="custom-ng-select">
+                  </ng-select>
+                </div>
+                <!-- Récap -->
+                <div class="px-3 pb-3 text-xs text-slate-400 flex gap-4">
+                  <span><i class="fas fa-check-circle text-indigo-400"></i> S1: {{matieresSemestre.s1.length}} matière(s)</span>
+                  <span><i class="fas fa-check-circle text-indigo-400"></i> S2: {{matieresSemestre.s2.length}} matière(s)</span>
+                </div>
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label">Heures contractuelles</label>
@@ -291,6 +328,8 @@ export class EnseignantsComponent implements OnInit {
   search = ''; filterGrade = ''; filterStatut = ''; filterDept: any = '';
   showSuccessModal = false;
   tempCredentials: any = null;
+  matieresSemestre: { s1: number[]; s2: number[] } = { s1: [], s2: [] };
+  activeSemestre: 'S1' | 'S2' = 'S1';
 
   constructor(private api: ApiService, private auth: AuthService, private fb: FormBuilder) {
     this.initForm();
@@ -309,8 +348,7 @@ export class EnseignantsComponent implements OnInit {
       heures_contractuelles: [192],
       taux_horaire_cm: [0],
       taux_horaire_td: [0],
-      taux_horaire_tp: [0],
-      matieres: [[]]
+      taux_horaire_tp: [0]
     });
   }
 
@@ -351,9 +389,10 @@ export class EnseignantsComponent implements OnInit {
     });
   }
 
-  openModal(e?: Enseignant) {
+  openModal(e?: any) {
     this.editing = e || null;
     this.formError = ''; this.submitted = false;
+    this.activeSemestre = 'S1';
 
     if (e) {
       this.form.patchValue({
@@ -368,9 +407,17 @@ export class EnseignantsComponent implements OnInit {
         heures_contractuelles: e.heures_contractuelles ?? 192,
         taux_horaire_cm: e.taux_horaire_cm || 0,
         taux_horaire_td: e.taux_horaire_td || 0,
-        taux_horaire_tp: e.taux_horaire_tp || 0,
-        matieres: e.matieres ? e.matieres.map(m => m.id) : []
+        taux_horaire_tp: e.taux_horaire_tp || 0
       });
+      // Charger les attributions existantes pour pré-remplir les semestres
+      this.matieresSemestre = { s1: [], s2: [] };
+      if (e.attributions) {
+        e.attributions.filter((a: any) => a.semestre === 'S1').forEach((a: any) => this.matieresSemestre.s1.push(a.matiere_id));
+        e.attributions.filter((a: any) => a.semestre === 'S2').forEach((a: any) => this.matieresSemestre.s2.push(a.matiere_id));
+      } else if (e.matieres) {
+        // Fallback: si pas d'attributions avec semestre, mettre tout en S1
+        this.matieresSemestre.s1 = e.matieres.map((m: any) => m.id);
+      }
     } else {
       this.form.reset({
         grade: 'Assistant',
@@ -378,9 +425,9 @@ export class EnseignantsComponent implements OnInit {
         taux_horaire_cm: 0,
         taux_horaire_td: 0,
         taux_horaire_tp: 0,
-        heures_contractuelles: 192,
-        matieres: []
+        heures_contractuelles: 192
       });
+      this.matieresSemestre = { s1: [], s2: [] };
     }
 
     this.showModal = true;
@@ -408,16 +455,23 @@ export class EnseignantsComponent implements OnInit {
     this.saving = true; this.formError = '';
     const formValue = this.form.value;
 
+    // Construire le tableau de matières avec semestres
+    const matieresAvecSemestre = [
+      ...this.matieresSemestre.s1.map(id => ({ id, semestre: 'S1' })),
+      ...this.matieresSemestre.s2.map(id => ({ id, semestre: 'S2' }))
+    ];
+
+    const payload = { ...formValue, matieres: matieresAvecSemestre };
+
     const req = this.editing
-      ? this.api.updateEnseignant(this.editing.id, formValue)
-      : this.api.createEnseignant(formValue);
+      ? this.api.updateEnseignant(this.editing.id, payload)
+      : this.api.createEnseignant(payload);
     req.subscribe({
       next: (res: any) => {
         this.saving = false;
         this.showModal = false;
         this.load();
 
-        // Afficher les identifiants si c'est une création
         if (!this.editing) {
           this.tempCredentials = {
             email: this.form.value.email,

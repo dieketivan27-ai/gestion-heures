@@ -125,10 +125,31 @@ exports.create = async (req, res) => {
     
     const enseignant_id = result.insertId;
 
-    // Ajout des matières
+    // Ajout des matières avec semestre dans attributions_matieres
     if (matieres && Array.isArray(matieres) && matieres.length > 0) {
-      const values = matieres.map(mId => [enseignant_id, mId]);
-      await conn.query('INSERT INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [values]);
+      // Récupérer l'année académique active
+      const [[activeYear]] = await conn.execute('SELECT id FROM annees_academiques WHERE is_active = 1 LIMIT 1');
+      const anneeId = activeYear ? activeYear.id : null;
+
+      // Insérer aussi dans l'ancienne table pour compatibilité
+      const oldValues = matieres.map(m => [enseignant_id, typeof m === 'object' ? m.id : m]);
+      if (oldValues.length > 0) {
+        await conn.query('INSERT IGNORE INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [oldValues]);
+      }
+
+      // Insérer dans attributions_matieres (nouvelle table)
+      if (anneeId) {
+        for (const mat of matieres) {
+          const matiereId = typeof mat === 'object' ? mat.id : mat;
+          const semestre = typeof mat === 'object' ? (mat.semestre || 'S1') : 'S1';
+          await conn.execute(
+            `INSERT INTO attributions_matieres (enseignant_id, matiere_id, annee_academique_id, semestre, statut)
+             VALUES (?, ?, ?, ?, 'EN_ATTENTE')
+             ON DUPLICATE KEY UPDATE semestre = VALUES(semestre)`,
+            [enseignant_id, matiereId, anneeId, semestre]
+          );
+        }
+      }
     }
 
     await conn.commit();
@@ -179,11 +200,36 @@ exports.update = async (req, res) => {
        heures_contractuelles || 192, matricule || null, req.params.id]
     );
 
-    // Mettre à jour les matières (Sync many-to-many)
-    await conn.execute('DELETE FROM enseignants_matieres WHERE enseignant_id = ?', [req.params.id]);
-    if (matieres && Array.isArray(matieres) && matieres.length > 0) {
-      const values = matieres.map(mId => [req.params.id, mId]);
-      await conn.query('INSERT INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [values]);
+    // Sync les matières — on ne supprime que les EN_ATTENTE (les acceptées/refusées sont conservées)
+    if (matieres && Array.isArray(matieres)) {
+      // Récupérer l'année académique active
+      const [[activeYear]] = await conn.execute('SELECT id FROM annees_academiques WHERE is_active = 1 LIMIT 1');
+      const anneeId = activeYear ? activeYear.id : null;
+
+      // Sync ancienne table pour compatibilité
+      await conn.execute('DELETE FROM enseignants_matieres WHERE enseignant_id = ?', [req.params.id]);
+      if (matieres.length > 0) {
+        const oldValues = matieres.map(m => [req.params.id, typeof m === 'object' ? m.id : m]);
+        await conn.query('INSERT IGNORE INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [oldValues]);
+      }
+
+      // Sync table attributions_matieres (seulement les EN_ATTENTE)
+      if (anneeId) {
+        await conn.execute(
+          `DELETE FROM attributions_matieres WHERE enseignant_id = ? AND annee_academique_id = ? AND statut = 'EN_ATTENTE'`,
+          [req.params.id, anneeId]
+        );
+        for (const mat of matieres) {
+          const matiereId = typeof mat === 'object' ? mat.id : mat;
+          const semestre = typeof mat === 'object' ? (mat.semestre || 'S1') : 'S1';
+          await conn.execute(
+            `INSERT INTO attributions_matieres (enseignant_id, matiere_id, annee_academique_id, semestre, statut)
+             VALUES (?, ?, ?, ?, 'EN_ATTENTE')
+             ON DUPLICATE KEY UPDATE semestre = VALUES(semestre)`,
+            [req.params.id, matiereId, anneeId, semestre]
+          );
+        }
+      }
     }
 
     if (userId) {
