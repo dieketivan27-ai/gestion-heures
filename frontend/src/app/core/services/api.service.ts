@@ -54,8 +54,8 @@ export class ApiService {
     const params = this.buildFilters({ annee_id: anneeId });
     return this.http.get<DashboardData>(`${this.base}/dashboard`, { params });
   }
-  getEtatPaiement(anneeId?: any): Observable<any[]> {
-    const params = this.buildFilters({ annee_id: anneeId });
+  getEtatPaiement(anneeId?: any, mois?: any): Observable<any[]> {
+    const params = this.buildFilters({ annee_id: anneeId, mois: mois });
     return this.http.get<any[]>(`${this.base}/rapports/paiement`, { params });
   }
 

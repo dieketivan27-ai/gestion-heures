@@ -98,17 +98,21 @@ exports.getDashboard = async (req, res) => {
 };
 
 exports.getEtatPaiement = async (req, res) => {
-  const { annee_id } = req.query;
-  try {
-    let anneeId = annee_id;
-    let whereAnnee = '';
-    const paramsHeures = [];
-    if (anneeId && anneeId !== 'ALL') {
-      whereAnnee = ' WHERE h.annee_academique_id = ? AND h.valide = 1 ';
-      paramsHeures.push(anneeId);
-    } else {
-      whereAnnee = ' WHERE h.valide = 1 ';
-    }
+    const { annee_id, mois } = req.query;
+    try {
+      let anneeId = annee_id;
+      let whereAnnee = ' WHERE h.valide = 1 ';
+      const paramsHeures = [];
+      
+      if (anneeId && anneeId !== 'ALL') {
+        whereAnnee += ' AND h.annee_academique_id = ? ';
+        paramsHeures.push(anneeId);
+      }
+      
+      if (mois && mois !== 'ALL') {
+        whereAnnee += ' AND MONTH(h.date_cours) = ? ';
+        paramsHeures.push(mois);
+      }
     // 1. Récupérer les enseignants
     const [enseignants] = await db.execute(`
       SELECT e.id, e.matricule, e.nom, e.prenom, e.grade, e.statut,

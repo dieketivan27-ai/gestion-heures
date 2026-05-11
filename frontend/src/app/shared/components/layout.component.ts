@@ -119,6 +119,13 @@ import { Subscription, interval } from 'rxjs';
               <i class="fas fa-user-shield sidebar-link-icon"></i>
               <span class="sidebar-link-label">Utilisateurs</span>
             </a>
+            <a routerLink="/logs" routerLinkActive="active"
+               class="sidebar-link"
+               [title]="sidebarCollapsed ? 'Journal des actions' : ''"
+               (click)="showMobileMenu = false">
+              <i class="fas fa-history sidebar-link-icon"></i>
+              <span class="sidebar-link-label">Journal des actions</span>
+            </a>
           </div>
         </nav>
 
@@ -283,6 +290,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
     else if (url.includes('import')) this.pageTitle = 'Importation de données';
     else if (url.includes('parametres')) this.pageTitle = 'Paramètres système';
     else if (url.includes('utilisateurs')) this.pageTitle = 'Gestion des utilisateurs';
+    else if (url.includes('logs')) this.pageTitle = 'Journal des actions';
     else if (url.includes('profile')) this.pageTitle = 'Mon Profil';
   }
 

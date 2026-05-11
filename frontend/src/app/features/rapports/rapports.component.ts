@@ -32,6 +32,11 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
           <option value="ALL">Toutes les années</option>
           <option *ngFor="let a of annees" [value]="a.id">{{a.libelle}}</option>
         </select>
+        
+        <select class="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" [(ngModel)]="selectedMois" (change)="load()">
+          <option value="ALL">Tous les mois</option>
+          <option *ngFor="let m of moisList" [value]="m.id">{{m.nom}}</option>
+        </select>
 
         <button *ngIf="!isTeacher" (click)="exportExcel()" [disabled]="!data.length"
           class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium transition-colors">
@@ -233,9 +238,17 @@ export class RapportsComponent implements OnInit {
   data: any[] = [];
   annees: AnneeAcademique[] = [];
   selectedAnnee: number | null = null;
+  selectedMois: string = 'ALL';
   selectedTeacherId: number | null = null;
   loading = false;
   view: 'global' | 'compta' = 'global';
+
+  moisList = [
+    { id: '1', nom: 'Janvier' }, { id: '2', nom: 'Février' }, { id: '3', nom: 'Mars' },
+    { id: '4', nom: 'Avril' }, { id: '5', nom: 'Mai' }, { id: '6', nom: 'Juin' },
+    { id: '7', nom: 'Juillet' }, { id: '8', nom: 'Août' }, { id: '9', nom: 'Septembre' },
+    { id: '10', nom: 'Octobre' }, { id: '11', nom: 'Novembre' }, { id: '12', nom: 'Décembre' }
+  ];
 
   constructor(
     private api: ApiService,
@@ -256,7 +269,7 @@ export class RapportsComponent implements OnInit {
 
   load() {
     this.loading = true;
-    this.api.getEtatPaiement(this.selectedAnnee || undefined).subscribe({
+    this.api.getEtatPaiement(this.selectedAnnee || undefined, this.selectedMois).subscribe({
       next: d => {
         this.data = d;
         this.selectedTeacherId = null;
@@ -280,6 +293,8 @@ export class RapportsComponent implements OnInit {
     let headers: string[] = [];
     let rows: any[] = [];
     const anneeLibelle = this.annees.find(a => a.id == this.selectedAnnee)?.libelle || '';
+    const moisNom = this.moisList.find(m => m.id === this.selectedMois)?.nom || '';
+    const periode = moisNom ? `${moisNom} ${anneeLibelle}` : anneeLibelle;
 
     if (this.view === 'global') {
       headers = ['Matricule', 'Nom', 'Prénom', 'Grade', 'Statut', 'Département', 'CM (h)', 'TD (h)', 'TP (h)', 'Montant CM', 'Montant TD', 'Montant TP', 'Total FCFA'];
@@ -298,12 +313,14 @@ export class RapportsComponent implements OnInit {
       ]);
     }
 
-    this.exportSvc.exportExcel(rows, headers, `rapport_${this.view}_${anneeLibelle}`);
+    this.exportSvc.exportExcel(rows, headers, `rapport_${this.view}_${periode.replace(/ /g, '_')}`);
   }
 
   exportPDF() {
     const anneeLibelle = this.annees.find(a => a.id == this.selectedAnnee)?.libelle || '';
-    this.exportSvc.exportGlobalPDF(this.data, this.view, anneeLibelle);
+    const moisNom = this.moisList.find(m => m.id === this.selectedMois)?.nom || '';
+    const periode = moisNom ? `${moisNom} ${anneeLibelle}` : anneeLibelle;
+    this.exportSvc.exportGlobalPDF(this.data, this.view, periode);
   }
 
   exportIndividuel(enseignantId: number) {
