@@ -7,6 +7,36 @@
 @tailwind components;
 @tailwind utilities;
 
+@import "@ng-select/ng-select/themes/default.theme.css";
+
+/* ---- Custom ng-select styles to match Tailwind UI ---- */
+.custom-ng-select .ng-select-container {
+  @apply w-full px-4 border border-slate-200 rounded-xl text-sm text-slate-700 bg-slate-50/50 min-h-[42px] transition-all duration-200;
+  border-radius: 0.75rem !important; /* xl */
+}
+.custom-ng-select.ng-select-focused .ng-select-container {
+  @apply bg-white border-blue-500 ring-4 ring-blue-500/10 shadow-none;
+}
+.custom-ng-select .ng-value-container .ng-value {
+  @apply bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-xs font-medium px-2 py-0.5 mt-1 mb-1 mr-1;
+}
+.custom-ng-select .ng-value-container .ng-value .ng-value-icon {
+  @apply border-indigo-200 hover:bg-indigo-100 text-indigo-600 px-1.5;
+}
+.custom-ng-select .ng-dropdown-panel {
+  @apply border border-slate-200 rounded-xl shadow-lg mt-1 text-sm overflow-hidden;
+}
+.custom-ng-select .ng-dropdown-panel .ng-option {
+  @apply px-4 py-2 text-slate-700 transition-colors;
+}
+.custom-ng-select .ng-dropdown-panel .ng-option:hover,
+.custom-ng-select .ng-dropdown-panel .ng-option.ng-option-marked {
+  @apply bg-slate-50 text-slate-900;
+}
+.custom-ng-select .ng-dropdown-panel .ng-option.ng-option-selected {
+  @apply bg-blue-50 text-blue-700 font-medium;
+}
+
 /* ---- CSS VARIABLES (kept for legacy component references) ---- */
 :root {
   --primary: #1a56db;

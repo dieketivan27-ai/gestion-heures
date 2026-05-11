@@ -34,6 +34,9 @@ export const routes: Routes = [
         loadComponent: () => import('./features/import/import.component').then(m => m.ImportComponent),
         canActivate: [adminGuard]
       },
+      { path: 'admin/matieres', loadComponent: () => import('./features/matieres/admin-matieres.component').then(m => m.AdminMatieresComponent) },
+      { path: 'admin/attributions', loadComponent: () => import('./features/matieres/admin-attributions.component').then(m => m.AdminAttributionsComponent) },
+      { path: 'enseignant/mes-matieres', loadComponent: () => import('./features/matieres/enseignant-attributions.component').then(m => m.EnseignantAttributionsComponent) },
     ]
   },
   { path: '**', redirectTo: '' }

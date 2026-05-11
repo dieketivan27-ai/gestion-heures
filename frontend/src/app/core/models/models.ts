@@ -37,6 +37,7 @@ export interface Enseignant {
   total_td?: number;
   total_tp?: number;
   total_heures?: number;
+  matieres?: Matiere[];
 }
 
 export interface HeureEffectuee {

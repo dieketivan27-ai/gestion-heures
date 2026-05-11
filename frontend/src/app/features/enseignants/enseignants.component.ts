@@ -1,16 +1,17 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { NgSelectModule } from '@ng-select/ng-select';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
-import { Enseignant, Departement, AnneeAcademique } from '../../core/models/models';
+import { Enseignant, Departement, AnneeAcademique, Matiere } from '../../core/models/models';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 
 @Component({
   selector: 'app-enseignants',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, AvatarComponent],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, AvatarComponent, NgSelectModule],
   template: `
     <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
       <div>
@@ -102,7 +103,14 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
                 <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold"
                   [ngClass]="e.statut==='Permanent' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'">{{e.statut}}</span>
               </td>
-              <td class="px-4 py-3 text-sm text-slate-600">{{e.departement_nom || '-'}}</td>
+              <td class="px-4 py-3 text-sm text-slate-600">
+                <div class="mb-1">{{e.departement_nom || '-'}}</div>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100" *ngFor="let matiere of e.matieres">
+                    {{ matiere.intitule }}
+                  </span>
+                </div>
+              </td>
               <td class="px-4 py-3 text-slate-600">{{e.total_cm | number:'1.0-1'}}</td>
               <td class="px-4 py-3 text-slate-600">{{e.total_td | number:'1.0-1'}}</td>
               <td class="px-4 py-3 text-slate-600">{{e.total_tp | number:'1.0-1'}}</td>
@@ -130,7 +138,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
     </div>
 
     <!-- MODAL ENSEIGNANT -->
-    <div class="modal-overlay" *ngIf="showModal" (click)="closeModal($event)">
+    <div class="modal-overlay" *ngIf="showModal">
       <div class="modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <span class="modal-title">{{editing ? 'Modifier' : 'Ajouter'}} un enseignant</span>
@@ -140,30 +148,30 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
           <div *ngIf="formError" class="alert alert-danger mb-4">
             <i class="fas fa-exclamation-circle"></i> {{formError}}
           </div>
-          <div class="form-grid">
+          <form [formGroup]="form" class="form-grid">
             <div class="form-group">
               <label class="form-label text-slate-500">Matricule</label>
-              <input class="form-control" [(ngModel)]="form.matricule" placeholder="ENS001">
+              <input class="form-control" formControlName="matricule" placeholder="ENS001">
             </div>
             <div class="form-group">
               <label class="form-label">Nom *</label>
-              <input class="form-control" [(ngModel)]="form.nom" [class.border-red-300]="submitted && !form.nom">
+              <input class="form-control" formControlName="nom" [class.border-red-300]="submitted && form.get('nom')?.invalid">
             </div>
             <div class="form-group">
               <label class="form-label">Prénom *</label>
-              <input class="form-control" [(ngModel)]="form.prenom" [class.border-red-300]="submitted && !form.prenom">
+              <input class="form-control" formControlName="prenom" [class.border-red-300]="submitted && form.get('prenom')?.invalid">
             </div>
             <div class="form-group">
               <label class="form-label">Email *</label>
-              <input type="email" class="form-control" [(ngModel)]="form.email">
+              <input type="email" class="form-control" formControlName="email" [class.border-red-300]="submitted && form.get('email')?.invalid">
             </div>
             <div class="form-group">
               <label class="form-label">Téléphone</label>
-              <input class="form-control" [(ngModel)]="form.telephone" placeholder="+225 ...">
+              <input class="form-control" formControlName="telephone" placeholder="+225 ...">
             </div>
             <div class="form-group">
               <label class="form-label">Grade *</label>
-              <select class="form-control" [(ngModel)]="form.grade">
+              <select class="form-control" formControlName="grade">
                 <option value="Assistant">Assistant</option>
                 <option value="Maitre-Assistant">Maître-Assistant</option>
                 <option value="Professeur">Professeur</option>
@@ -172,37 +180,49 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
             </div>
             <div class="form-group">
               <label class="form-label">Statut *</label>
-              <select class="form-control" [(ngModel)]="form.statut" (change)="onStatutChange()">
+              <select class="form-control" formControlName="statut" (change)="onStatutChange()">
                 <option value="Permanent">Permanent</option>
                 <option value="Vacataire">Vacataire</option>
               </select>
             </div>
             <div class="form-group">
               <label class="form-label">Département</label>
-              <select class="form-control" [(ngModel)]="form.departement_id">
+              <select class="form-control" formControlName="departement_id">
                 <option [value]="null">-- Aucun --</option>
                 <option *ngFor="let d of departements" [value]="d.id">{{d.nom}}</option>
               </select>
             </div>
+            <div class="form-group col-span-full">
+              <label class="form-label">Matières</label>
+              <ng-select
+                [items]="matieresList"
+                bindLabel="intitule"
+                bindValue="id"
+                [multiple]="true"
+                placeholder="Sélectionner une ou plusieurs matières"
+                formControlName="matieres"
+                class="custom-ng-select">
+              </ng-select>
+            </div>
             <div class="form-group">
               <label class="form-label">Heures contractuelles</label>
-              <input type="number" class="form-control" [(ngModel)]="form.heures_contractuelles">
+              <input type="number" class="form-control" formControlName="heures_contractuelles">
             </div>
             <div class="grid grid-cols-3 gap-3 col-span-full mt-2 pt-4 border-t border-slate-100">
                <div class="form-group">
                  <label class="form-label">Taux CM (FCFA/h)</label>
-                 <input type="number" class="form-control" [(ngModel)]="form.taux_horaire_cm">
+                 <input type="number" class="form-control" formControlName="taux_horaire_cm">
                </div>
                <div class="form-group">
                  <label class="form-label">Taux TD (FCFA/h)</label>
-                 <input type="number" class="form-control" [(ngModel)]="form.taux_horaire_td">
+                 <input type="number" class="form-control" formControlName="taux_horaire_td">
                </div>
                <div class="form-group">
                  <label class="form-label">Taux TP (FCFA/h)</label>
-                 <input type="number" class="form-control" [(ngModel)]="form.taux_horaire_tp">
+                 <input type="number" class="form-control" formControlName="taux_horaire_tp">
                </div>
             </div>
-          </div>
+          </form>
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline" (click)="showModal=false">Annuler</button>
@@ -215,7 +235,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
     </div>
 
     <!-- MODAL SUCCÈS -->
-    <div class="modal-overlay" *ngIf="showSuccessModal" (click)="showSuccessModal=false">
+    <div class="modal-overlay" *ngIf="showSuccessModal">
       <div class="modal max-w-md scale-in-center" (click)="$event.stopPropagation()">
         <div class="p-8 md:p-10 text-center">
           <div class="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm ring-4 ring-emerald-50/50">
@@ -259,11 +279,12 @@ export class EnseignantsComponent implements OnInit {
   filtered: Enseignant[] = [];
   departements: Departement[] = [];
   annees: AnneeAcademique[] = [];
+  matieresList: Matiere[] = [];
   selectedAnnee: number | null = null;
   loading = true;
   showModal = false;
   editing: Enseignant | null = null;
-  form: any = {};
+  form!: FormGroup;
   saving = false;
   formError = '';
   submitted = false;
@@ -271,7 +292,27 @@ export class EnseignantsComponent implements OnInit {
   showSuccessModal = false;
   tempCredentials: any = null;
 
-  constructor(private api: ApiService, private auth: AuthService) { }
+  constructor(private api: ApiService, private auth: AuthService, private fb: FormBuilder) {
+    this.initForm();
+  }
+
+  initForm() {
+    this.form = this.fb.group({
+      matricule: [''],
+      nom: ['', Validators.required],
+      prenom: ['', Validators.required],
+      email: ['', [Validators.required, Validators.email]],
+      telephone: [''],
+      grade: ['Assistant', Validators.required],
+      statut: ['Permanent', Validators.required],
+      departement_id: [null],
+      heures_contractuelles: [192],
+      taux_horaire_cm: [0],
+      taux_horaire_td: [0],
+      taux_horaire_tp: [0],
+      matieres: [[]]
+    });
+  }
 
   get isRH() { return this.auth.isRH; }
   get isAdmin() { return this.auth.isAdmin; }
@@ -283,6 +324,7 @@ export class EnseignantsComponent implements OnInit {
 
   ngOnInit() {
     this.api.getDepartements().subscribe(d => this.departements = d);
+    this.api.getMatieres().subscribe(m => this.matieresList = m);
     this.api.getAnnees().subscribe(a => {
       this.annees = a;
       const active = a.find(x => x.is_active);
@@ -311,15 +353,47 @@ export class EnseignantsComponent implements OnInit {
 
   openModal(e?: Enseignant) {
     this.editing = e || null;
-    this.form = e ? { ...e } : { grade: 'Assistant', statut: 'Permanent', taux_horaire_cm: 0, taux_horaire_td: 0, taux_horaire_tp: 0, heures_contractuelles: 192 };
-    this.formError = ''; this.submitted = false; this.showModal = true;
+    this.formError = ''; this.submitted = false;
+    
+    if (e) {
+      this.form.patchValue({
+        matricule: e.matricule || '',
+        nom: e.nom || '',
+        prenom: e.prenom || '',
+        email: e.email || '',
+        telephone: e.telephone || '',
+        grade: e.grade || 'Assistant',
+        statut: e.statut || 'Permanent',
+        departement_id: e.departement_id || null,
+        heures_contractuelles: e.heures_contractuelles ?? 192,
+        taux_horaire_cm: e.taux_horaire_cm || 0,
+        taux_horaire_td: e.taux_horaire_td || 0,
+        taux_horaire_tp: e.taux_horaire_tp || 0,
+        matieres: e.matieres ? e.matieres.map(m => m.id) : []
+      });
+    } else {
+      this.form.reset({
+        grade: 'Assistant',
+        statut: 'Permanent',
+        taux_horaire_cm: 0,
+        taux_horaire_td: 0,
+        taux_horaire_tp: 0,
+        heures_contractuelles: 192,
+        matieres: []
+      });
+    }
+    
+    this.showModal = true;
   }
 
   onStatutChange() {
-    if (this.form.statut === 'Vacataire') {
-      this.form.heures_contractuelles = 0;
-    } else if (this.form.statut === 'Permanent' && (this.form.heures_contractuelles === 0 || !this.form.heures_contractuelles)) {
-      this.form.heures_contractuelles = 192;
+    const statut = this.form.get('statut')?.value;
+    const heures = this.form.get('heures_contractuelles')?.value;
+    
+    if (statut === 'Vacataire') {
+      this.form.get('heures_contractuelles')?.setValue(0);
+    } else if (statut === 'Permanent' && (!heures || heures === 0)) {
+      this.form.get('heures_contractuelles')?.setValue(192);
     }
   }
 
@@ -327,11 +401,16 @@ export class EnseignantsComponent implements OnInit {
 
   save() {
     this.submitted = true;
-    if (!this.form.nom || !this.form.prenom || !this.form.email) { this.formError = 'Veuillez remplir les champs obligatoires'; return; }
+    if (this.form.invalid) { 
+      this.formError = 'Veuillez remplir les champs obligatoires correctement'; 
+      return; 
+    }
     this.saving = true; this.formError = '';
+    const formValue = this.form.value;
+    
     const req = this.editing
-      ? this.api.updateEnseignant(this.editing.id, this.form)
-      : this.api.createEnseignant(this.form);
+      ? this.api.updateEnseignant(this.editing.id, formValue)
+      : this.api.createEnseignant(formValue);
     req.subscribe({
       next: (res: any) => {
         this.saving = false;
@@ -341,7 +420,7 @@ export class EnseignantsComponent implements OnInit {
         // Afficher les identifiants si c'est une création
         if (!this.editing) {
           this.tempCredentials = {
-            email: this.form.email,
+            email: this.form.value.email,
             password: res.tempPassword || '******',
             emailSent: res.emailSent
           };

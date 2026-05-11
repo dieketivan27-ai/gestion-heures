@@ -33,6 +33,23 @@ exports.getAll = async (req, res) => {
       ${whereClause}
       GROUP BY e.id ORDER BY e.nom, e.prenom
     `, queryParams);
+
+    // Récupérer les matières pour tous ces enseignants
+    if (rows.length > 0) {
+      const ids = rows.map(r => r.id);
+      const [matRows] = await db.execute(`
+        SELECT em.enseignant_id, m.id, m.intitule
+        FROM enseignants_matieres em
+        JOIN matieres m ON em.matiere_id = m.id
+        WHERE em.enseignant_id IN (${ids.map(() => '?').join(',')})
+      `, ids);
+
+      // Associer les matières aux enseignants
+      rows.forEach(r => {
+        r.matieres = matRows.filter(m => m.enseignant_id === r.id);
+      });
+    }
+
     res.json(rows);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
@@ -54,7 +71,20 @@ exports.getById = async (req, res) => {
       [req.params.id]
     );
     if (!rows.length) return res.status(404).json({ message: 'Enseignant introuvable' });
-    res.json(rows[0]);
+
+    const enseignant = rows[0];
+
+    // Récupérer les matières
+    const [matRows] = await db.execute(`
+      SELECT m.id, m.intitule
+      FROM enseignants_matieres em
+      JOIN matieres m ON em.matiere_id = m.id
+      WHERE em.enseignant_id = ?
+    `, [req.params.id]);
+
+    enseignant.matieres = matRows;
+
+    res.json(enseignant);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
@@ -66,7 +96,7 @@ const { recalculateComplementaryStatus } = require('./heureController');
 exports.create = async (req, res) => {
   const { nom, prenom, email, telephone, grade, statut, departement_id,
           taux_horaire_cm, taux_horaire_td, taux_horaire_tp, heures_contractuelles,
-          matricule } = req.body;
+          matricule, matieres } = req.body;
           
   const conn = await db.getConnection();
   try {
@@ -78,8 +108,8 @@ exports.create = async (req, res) => {
     
     // Création du compte utilisateur avec obligation de changement de MDP
     const [userRes] = await conn.execute(
-      'INSERT INTO users (email, password, role, must_change_password) VALUES (?,?,?,TRUE)',
-      [email, hash, 'enseignant']
+      'INSERT INTO users (email, password, role, nom, prenom, must_change_password) VALUES (?,?,?,?,?,TRUE)',
+      [email, hash, 'enseignant', nom, prenom]
     );
     const user_id = userRes.insertId;
     
@@ -93,16 +123,24 @@ exports.create = async (req, res) => {
        taux_horaire_tp || 0, (heures_contractuelles !== undefined) ? heures_contractuelles : (statut === 'Vacataire' ? 0 : 192)]
     );
     
+    const enseignant_id = result.insertId;
+
+    // Ajout des matières
+    if (matieres && Array.isArray(matieres) && matieres.length > 0) {
+      const values = matieres.map(mId => [enseignant_id, mId]);
+      await conn.query('INSERT INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [values]);
+    }
+
     await conn.commit();
-    await auditLog(req.user.id, 'CREATE', 'enseignants', result.insertId, req.body, req.ip);
+    await auditLog(req.user.id, 'CREATE', 'enseignants', enseignant_id, req.body, req.ip);
     
     // Tentative d'envoi de l'email
     const emailSent = await sendWelcomeEmail(email, tempPassword, nom, prenom);
     
     res.status(201).json({ 
-      id: result.insertId, 
+      id: enseignant_id, 
       message: emailSent ? 'Enseignant créé et email envoyé' : 'Enseignant créé (échec envoi email)',
-      tempPassword: emailSent ? null : tempPassword, // On renvoie le MDP si l'email échoue pour que l'admin puisse le donner manuellement
+      tempPassword: emailSent ? null : tempPassword,
       emailSent
     });
   } catch (err) {
@@ -117,7 +155,7 @@ exports.create = async (req, res) => {
 
 exports.update = async (req, res) => {
   const { nom, prenom, email, telephone, grade, statut, departement_id,
-          taux_horaire_cm, taux_horaire_td, taux_horaire_tp, heures_contractuelles, matricule } = req.body;
+          taux_horaire_cm, taux_horaire_td, taux_horaire_tp, heures_contractuelles, matricule, matieres } = req.body;
           
   const conn = await db.getConnection();
   try {
@@ -141,9 +179,15 @@ exports.update = async (req, res) => {
        heures_contractuelles || 192, matricule || null, req.params.id]
     );
 
-    // Synchroniser l'email dans la table users si nécessaire
+    // Mettre à jour les matières (Sync many-to-many)
+    await conn.execute('DELETE FROM enseignants_matieres WHERE enseignant_id = ?', [req.params.id]);
+    if (matieres && Array.isArray(matieres) && matieres.length > 0) {
+      const values = matieres.map(mId => [req.params.id, mId]);
+      await conn.query('INSERT INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [values]);
+    }
+
     if (userId) {
-      await conn.execute('UPDATE users SET email = ? WHERE id = ?', [email, userId]);
+      await conn.execute('UPDATE users SET email = ?, nom = ?, prenom = ? WHERE id = ?', [email, nom, prenom, userId]);
     }
 
     // Recalculer le statut complémentaire si les heures contractuelles ont changé
