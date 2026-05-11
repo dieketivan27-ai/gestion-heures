@@ -28,4 +28,6 @@ export interface Attribution {
   observation?: string;
   dateAttribution: Date;
   dateReponse?: Date;
+  matiere_nom?: string;
+  matiere_code?: string;
 }

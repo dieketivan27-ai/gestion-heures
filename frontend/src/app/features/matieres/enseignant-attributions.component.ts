@@ -1,92 +1,134 @@
 import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { CommonModule, registerLocaleData } from '@angular/common';
+import localeFr from '@angular/common/locales/fr';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { GestionMatiereService } from '../../services/gestion-matiere.service';
 import { Attribution, Matiere } from '../../models/matiere.model';
-import { map, Observable } from 'rxjs';
+import { AuthService } from '../../core/services/auth.service';
+import { map, Observable, BehaviorSubject, combineLatest, switchMap, of, tap } from 'rxjs';
+
+registerLocaleData(localeFr);
 
 @Component({
   selector: 'app-enseignant-attributions',
   standalone: true,
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
   template: `
-    <div class="container mx-auto p-4">
-      <h1 class="text-2xl font-bold text-gray-800 mb-6">Mes Attributions de Matières</h1>
+    <div class="container mx-auto p-4 max-w-5xl">
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="text-3xl font-black text-gray-900 tracking-tight">Mes Attributions</h1>
+          <p class="text-gray-500 font-medium">Gérez vos matières pour l'année académique en cours</p>
+        </div>
+        <div class="bg-indigo-50 px-4 py-2 rounded-2xl border border-indigo-100">
+           <span class="text-indigo-600 font-bold text-sm">Session: {{ currentUser?.nom }} {{ currentUser?.prenom }}</span>
+        </div>
+      </div>
 
       <!-- Navigation par Semestre -->
-      <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-xl overflow-hidden shadow-sm">
+      <div class="flex p-1 bg-gray-100 rounded-2xl mb-8 shadow-inner max-w-md">
         <button *ngFor="let s of semestres" 
-          (click)="selectedSemestre = s"
-          [ngClass]="selectedSemestre === s ? 'border-indigo-600 text-indigo-600 bg-indigo-50' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'"
-          class="flex-1 py-4 px-1 text-center border-b-2 font-bold text-sm transition-all uppercase tracking-widest">
-          Semestre {{ s }}
+          (click)="onSemestreChange(s)"
+          [ngClass]="selectedSemestre === s ? 'bg-white text-indigo-600 shadow-md scale-105' : 'text-gray-500 hover:text-gray-700'"
+          class="flex-1 py-3 px-1 text-center rounded-xl font-black text-xs transition-all uppercase tracking-widest">
+          {{ s }}
         </button>
       </div>
 
-      <!-- Liste des attributions pour le semestre sélectionné -->
-      <div class="space-y-4">
-        <div *ngIf="(getFilteredAttributions() | async)?.length === 0" class="bg-gray-50 rounded-xl p-12 text-center border-2 border-dashed border-gray-200">
-          <p class="text-gray-500">Aucune attribution pour le semestre {{ selectedSemestre }}</p>
+      <!-- Liste des attributions -->
+      <div class="grid gap-6">
+        <div *ngIf="loading" class="py-12 text-center">
+           <div class="animate-spin inline-block w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full mb-4"></div>
+           <p class="text-gray-400 font-bold animate-pulse">Chargement de vos attributions...</p>
         </div>
 
-        <div *ngFor="let a of getFilteredAttributions() | async" class="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden group">
-          <div class="p-6 flex flex-wrap items-center justify-between gap-4">
-            <div class="flex-1">
-              <div class="flex items-center gap-3 mb-1">
-                <h3 class="text-xl font-bold text-gray-900">{{ getMatiereName(a.matiereId) }}</h3>
+        <div *ngIf="!loading && (filteredAttributions$ | async)?.length === 0" 
+             class="bg-white rounded-3xl p-16 text-center border-2 border-dashed border-gray-100 shadow-sm">
+          <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
+             <i class="fas fa-book-open text-gray-300 text-3xl"></i>
+          </div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">Aucune attribution trouvée</h3>
+          <p class="text-gray-400 max-w-xs mx-auto">Il n'y a pas encore de matières assignées pour le semestre {{ selectedSemestre }}.</p>
+        </div>
+
+        <div *ngFor="let a of filteredAttributions$ | async" 
+             class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <div class="p-8 flex flex-wrap items-center justify-between gap-6">
+            <div class="flex-1 min-w-[280px]">
+              <div class="flex items-center gap-4 mb-3">
+                <div class="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-indigo-100">
+                  {{ (a.matiere_nom || 'M').charAt(0) }}
+                </div>
+                <div>
+                  <h3 class="text-xl font-black text-gray-900 leading-tight">{{ a.matiere_nom }}</h3>
+                  <p class="text-indigo-500 font-bold text-xs tracking-widest uppercase">{{ a.matiere_code }}</p>
+                </div>
+              </div>
+              
+              <div class="flex flex-wrap gap-4 items-center">
                 <span [ngClass]="{
-                  'bg-yellow-100 text-yellow-800': a.statut === 'EN_ATTENTE',
-                  'bg-green-100 text-green-800': a.statut === 'ACCEPTEE',
-                  'bg-red-100 text-red-800': a.statut === 'REFUSEE'
-                }" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
-                  {{ a.statut }}
+                  'bg-amber-50 text-amber-600 border-amber-100': a.statut === 'EN_ATTENTE',
+                  'bg-emerald-50 text-emerald-600 border-emerald-100': a.statut === 'ACCEPTEE',
+                  'bg-rose-50 text-rose-600 border-rose-100': a.statut === 'REFUSEE'
+                }" class="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border">
+                  {{ a.statut.replace('_', ' ') }}
+                </span>
+                <span class="text-gray-400 text-xs font-bold flex items-center gap-1.5">
+                  <i class="far fa-calendar-alt"></i> {{ a.anneeAcademique }}
+                </span>
+                <span class="text-gray-900 text-xs font-black flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-xl">
+                  <i class="far fa-clock text-indigo-500"></i> {{ a.heuresTotal }} HEURES
                 </span>
               </div>
-              <p class="text-gray-500 text-sm flex items-center gap-4">
-                <span><i class="far fa-calendar-alt mr-1"></i> {{ a.anneeAcademique }}</span>
-                <span class="font-bold text-indigo-600"><i class="far fa-clock mr-1"></i> {{ a.heuresTotal }} heures totales</span>
-              </p>
             </div>
 
             <div class="flex items-center gap-3">
               <!-- Actions pour EN_ATTENTE -->
               <ng-container *ngIf="a.statut === 'EN_ATTENTE'">
-                <button (click)="onAccepter(a.id)" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg font-bold transition shadow-lg shadow-green-100">
-                  Accepter
+                <button (click)="onAccepter(a.id)" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg shadow-emerald-100 flex items-center gap-2">
+                  <i class="fas fa-check"></i> Accepter
                 </button>
-                <button (click)="openRefusal(a.id)" class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg font-bold transition shadow-lg shadow-red-100">
-                  Refuser
+                <button (click)="openRefusal(a.id)" class="bg-white hover:bg-rose-50 text-rose-500 border-2 border-rose-100 px-6 py-3 rounded-2xl font-black text-sm transition-all flex items-center gap-2">
+                  <i class="fas fa-times"></i> Refuser
                 </button>
               </ng-container>
               
               <!-- Date de réponse pour les autres -->
-              <div *ngIf="a.statut !== 'EN_ATTENTE'" class="text-right">
-                <p class="text-[10px] uppercase text-gray-400 font-bold">Répondu le</p>
-                <p class="text-sm font-medium text-gray-600">{{ a.dateReponse | date:'dd/MM/yyyy' }}</p>
+              <div *ngIf="a.statut !== 'EN_ATTENTE'" class="text-right bg-gray-50 px-6 py-3 rounded-2xl border border-gray-100">
+                <p class="text-[9px] uppercase text-gray-400 font-black tracking-tighter mb-0.5">Réponse enregistrée le</p>
+                <p class="text-sm font-black text-gray-800">{{ a.dateReponse | date:'dd MMMM yyyy':'':'fr' }}</p>
               </div>
             </div>
           </div>
 
           <!-- Section Refus (Textarea) -->
-          <div *ngIf="refusingId === a.id" class="px-6 pb-6 pt-0 border-t border-gray-50 bg-red-50/30">
-            <div class="mt-4">
-              <label class="block text-sm font-bold text-red-700 mb-2">Motif du refus (Obligatoire)</label>
+          <div *ngIf="refusingId === a.id" class="px-8 pb-8 pt-0 animate-fadeIn">
+            <div class="bg-rose-50 rounded-3xl p-6 border-2 border-rose-100">
+              <label class="block text-sm font-black text-rose-700 mb-3 flex items-center gap-2">
+                <i class="fas fa-exclamation-circle"></i> Motif du refus (Obligatoire)
+              </label>
               <textarea [(ngModel)]="refusalReason" rows="3" 
-                class="w-full rounded-xl border-red-200 border p-3 focus:ring-red-500 focus:border-red-500 shadow-inner"
+                class="w-full rounded-2xl border-rose-200 border-2 p-4 focus:ring-rose-500 focus:border-rose-500 shadow-inner text-gray-700 font-medium transition-all"
                 placeholder="Veuillez expliquer pourquoi vous refusez cette attribution..."></textarea>
-              <div class="flex justify-end gap-2 mt-4">
-                <button (click)="refusingId = null" class="px-4 py-2 text-gray-600 font-bold">Annuler</button>
-                <button (click)="onRefuser(a.id)" [disabled]="!refusalReason.trim()" 
-                  class="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-bold disabled:opacity-50 transition shadow-lg shadow-red-100">
-                  Confirmer le refus
+              <div class="flex justify-end gap-3 mt-4">
+                <button (click)="refusingId = null" class="px-6 py-3 text-gray-500 font-black text-sm hover:bg-rose-100/50 rounded-2xl transition-all">Annuler</button>
+                <button (click)="onRefuser(a.id)" [disabled]="!refusalReason.trim() || processing" 
+                  class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-3 rounded-2xl font-black text-sm disabled:opacity-50 transition-all shadow-lg shadow-rose-100">
+                  {{ processing ? 'Traitement...' : 'Confirmer le refus' }}
                 </button>
               </div>
             </div>
           </div>
 
           <!-- Observation si refusé -->
-          <div *ngIf="a.statut === 'REFUSEE' && a.observation" class="px-6 py-4 bg-gray-50 border-t border-gray-100 italic text-gray-600 text-sm">
-            <span class="font-bold text-red-700 not-italic mr-2">Observation:</span> "{{ a.observation }}"
+          <div *ngIf="a.statut === 'REFUSEE' && a.observation" class="mx-8 mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-100">
+            <div class="flex gap-3">
+              <i class="fas fa-quote-left text-rose-200 text-xl"></i>
+              <div>
+                <p class="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">Votre observation</p>
+                <p class="text-gray-600 font-medium italic">"{{ a.observation }}"</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -96,33 +138,60 @@ import { map, Observable } from 'rxjs';
 export class EnseignantAttributionsComponent implements OnInit {
   semestres: ('S1' | 'S2' | 'S3' | 'S4')[] = ['S1', 'S2', 'S3', 'S4'];
   selectedSemestre: 'S1' | 'S2' | 'S3' | 'S4' = 'S1';
-  matieres: Matiere[] = [];
   
-  // Dans un cas réel, on récupèrerait l'ID de l'enseignant connecté
-  currentEnseignantId = 1; // Mock: Kouassi Jean
-
+  private refresh$ = new BehaviorSubject<void>(undefined);
+  attributions$: Observable<Attribution[]>;
+  filteredAttributions$: Observable<Attribution[]>;
+  
+  loading = true;
+  processing = false;
   refusingId: number | null = null;
   refusalReason = '';
+  currentUser: any;
 
-  constructor(private matiereService: GestionMatiereService) {}
+  constructor(
+    private matiereService: GestionMatiereService,
+    private authService: AuthService
+  ) {
+    this.currentUser = this.authService.currentUser;
+    
+    // Setup the data pipeline
+    this.attributions$ = this.refresh$.pipe(
+      switchMap(() => {
+        if (!this.currentUser?.enseignant_id) return of([]);
+        this.loading = true;
+        return this.matiereService.getAttributionsByEnseignant(this.currentUser.enseignant_id);
+      }),
+      tap(() => this.loading = false)
+    );
 
-  ngOnInit(): void {
-    this.matiereService.getMatieres().subscribe(m => this.matieres = m);
-  }
-
-  getFilteredAttributions(): Observable<Attribution[]> {
-    return this.matiereService.getAttributionsByEnseignant(this.currentEnseignantId).pipe(
-      map(atts => atts.filter(a => a.semestre === this.selectedSemestre))
+    this.filteredAttributions$ = combineLatest([this.attributions$, this.refresh$]).pipe(
+      map(([atts]) => atts.filter(a => a.semestre === this.selectedSemestre))
     );
   }
 
-  getMatiereName(id: number): string {
-    return this.matieres.find(m => m.id === id)?.nom || 'Inconnue';
+  ngOnInit(): void {
+    // Pipeline is already setup in constructor
+  }
+
+  onSemestreChange(s: 'S1' | 'S2' | 'S3' | 'S4') {
+    this.selectedSemestre = s;
+    this.refresh$.next();
   }
 
   onAccepter(id: number) {
     if (confirm('Voulez-vous accepter cette attribution ?')) {
-      this.matiereService.accepterAttribution(id);
+      this.processing = true;
+      this.matiereService.accepterAttribution(id).subscribe({
+        next: () => {
+          this.processing = false;
+          this.refresh$.next();
+        },
+        error: (err) => {
+          this.processing = false;
+          alert('Erreur: ' + err.message);
+        }
+      });
     }
   }
 
@@ -133,9 +202,19 @@ export class EnseignantAttributionsComponent implements OnInit {
 
   onRefuser(id: number) {
     if (this.refusalReason.trim()) {
-      this.matiereService.refuserAttribution(id, this.refusalReason);
-      this.refusingId = null;
-      this.refusalReason = '';
+      this.processing = true;
+      this.matiereService.refuserAttribution(id, this.refusalReason).subscribe({
+        next: () => {
+          this.processing = false;
+          this.refusingId = null;
+          this.refusalReason = '';
+          this.refresh$.next();
+        },
+        error: (err) => {
+          this.processing = false;
+          alert('Erreur: ' + err.message);
+        }
+      });
     }
   }
 }

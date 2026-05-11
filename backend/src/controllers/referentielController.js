@@ -83,21 +83,21 @@ exports.getMatieres = async (req, res) => {
   }
 };
 exports.createMatiere = async (req, res) => {
-  const { intitule, code, filiere_id, niveau, volume_horaire_prevu_cm, volume_horaire_prevu_td, volume_horaire_prevu_tp, annee_academique_id } = req.body;
+  const { intitule, code, filiere_id, niveau, semestre, volume_horaire_prevu_cm, volume_horaire_prevu_td, volume_horaire_prevu_tp, annee_academique_id } = req.body;
   try {
     const [r] = await db.execute(
-      'INSERT INTO matieres (intitule,code,filiere_id,niveau,volume_horaire_prevu_cm,volume_horaire_prevu_td,volume_horaire_prevu_tp,annee_academique_id) VALUES (?,?,?,?,?,?,?,?)',
-      [intitule, code || null, filiere_id || null, niveau, volume_horaire_prevu_cm || 0, volume_horaire_prevu_td || 0, volume_horaire_prevu_tp || 0, annee_academique_id || null]
+      'INSERT INTO matieres (intitule,code,filiere_id,niveau,semestre,volume_horaire_prevu_cm,volume_horaire_prevu_td,volume_horaire_prevu_tp,annee_academique_id) VALUES (?,?,?,?,?,?,?,?,?)',
+      [intitule, code || null, filiere_id || null, niveau, semestre || 'S1', volume_horaire_prevu_cm || 0, volume_horaire_prevu_td || 0, volume_horaire_prevu_tp || 0, annee_academique_id || null]
     );
     res.status(201).json({ id: r.insertId });
   } catch (err) { res.status(400).json({ message: 'Erreur lors de la création', error: err.message }); }
 };
 exports.updateMatiere = async (req, res) => {
-  const { intitule, code, filiere_id, niveau, volume_horaire_prevu_cm, volume_horaire_prevu_td, volume_horaire_prevu_tp, annee_academique_id } = req.body;
+  const { intitule, code, filiere_id, niveau, semestre, volume_horaire_prevu_cm, volume_horaire_prevu_td, volume_horaire_prevu_tp, annee_academique_id } = req.body;
   try {
     await db.execute(
-      'UPDATE matieres SET intitule=?,code=?,filiere_id=?,niveau=?,volume_horaire_prevu_cm=?,volume_horaire_prevu_td=?,volume_horaire_prevu_tp=?,annee_academique_id=? WHERE id=?',
-      [intitule, code || null, filiere_id || null, niveau, volume_horaire_prevu_cm || 0, volume_horaire_prevu_td || 0, volume_horaire_prevu_tp || 0, annee_academique_id || null, req.params.id]
+      'UPDATE matieres SET intitule=?,code=?,filiere_id=?,niveau=?,semestre=?,volume_horaire_prevu_cm=?,volume_horaire_prevu_td=?,volume_horaire_prevu_tp=?,annee_academique_id=? WHERE id=?',
+      [intitule, code || null, filiere_id || null, niveau, semestre || 'S1', volume_horaire_prevu_cm || 0, volume_horaire_prevu_td || 0, volume_horaire_prevu_tp || 0, annee_academique_id || null, req.params.id]
     );
     res.json({ message: 'Mis à jour' });
   } catch (err) {

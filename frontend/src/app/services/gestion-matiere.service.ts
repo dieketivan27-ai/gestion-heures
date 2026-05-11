@@ -1,112 +1,79 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, map } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable, map } from 'rxjs';
 import { Matiere, Enseignant, Attribution } from '../models/matiere.model';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class GestionMatiereService {
-  private matieres = new BehaviorSubject<Matiere[]>([
-    { id: 1, nom: 'Algorithmique', code: 'ALGO1', heuresParSemaine: 4, semestre: 'S1', niveau: 'Licence 1' },
-    { id: 2, nom: 'Bases de données', code: 'BDD1', heuresParSemaine: 3, semestre: 'S2', niveau: 'Licence 2' },
-    { id: 3, nom: 'Dev Web', code: 'WEB1', heuresParSemaine: 4, semestre: 'S1', niveau: 'Licence 3' },
-    { id: 4, nom: 'Maths Discrètes', code: 'MATHD', heuresParSemaine: 2, semestre: 'S2', niveau: 'Licence 1' },
-    { id: 5, nom: 'Réseaux', code: 'RES1', heuresParSemaine: 3, semestre: 'S3', niveau: 'Licence 2' }
-  ]);
+  private apiUrl = environment.apiUrl;
 
-  private enseignants = new BehaviorSubject<Enseignant[]>([
-    { id: 1, nom: 'Kouassi', prenom: 'Jean', email: 'jean.kouassi@univ.ci', grade: 'Maître-Assistant', specialite: 'Développement' },
-    { id: 2, nom: 'Bamba', prenom: 'Fatoumata', email: 'f.bamba@univ.ci', grade: 'Professeur', specialite: 'Mathématiques' },
-    { id: 3, nom: 'Traoré', prenom: 'Moussa', email: 'm.traore@univ.ci', grade: 'Assistant', specialite: 'Réseaux' }
-  ]);
-
-  private attributions = new BehaviorSubject<Attribution[]>([
-    { 
-      id: 1, enseignantId: 1, matiereId: 1, semestre: 'S1', anneeAcademique: '2023-2024', 
-      heuresTotal: 64, statut: 'ACCEPTEE', dateAttribution: new Date('2023-09-01') 
-    },
-    { 
-      id: 2, enseignantId: 2, matiereId: 2, semestre: 'S2', anneeAcademique: '2023-2024', 
-      heuresTotal: 48, statut: 'EN_ATTENTE', dateAttribution: new Date('2024-01-15') 
-    },
-    { 
-      id: 3, enseignantId: 3, matiereId: 5, semestre: 'S3', anneeAcademique: '2023-2024', 
-      heuresTotal: 48, statut: 'EN_ATTENTE', dateAttribution: new Date('2024-01-20') 
-    }
-  ]);
-
-  constructor() {}
+  constructor(private http: HttpClient) {}
 
   // MATIERES
   getMatieres(): Observable<Matiere[]> {
-    return this.matieres.asObservable();
+    return this.http.get<Matiere[]>(`${this.apiUrl}/matieres`);
   }
 
-  addMatiere(matiere: Omit<Matiere, 'id'>): void {
-    const current = this.matieres.value;
-    const newId = current.length > 0 ? Math.max(...current.map(m => m.id)) + 1 : 1;
-    this.matieres.next([...current, { ...matiere, id: newId }]);
+  addMatiere(matiere: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/matieres`, matiere);
   }
 
-  updateMatiere(id: number, updatedMatiere: Partial<Matiere>): void {
-    const current = this.matieres.value;
-    this.matieres.next(current.map(m => m.id === id ? { ...m, ...updatedMatiere } : m));
+  updateMatiere(id: number, matiere: any): Observable<any> {
+    return this.http.put(`${this.apiUrl}/matieres/${id}`, matiere);
   }
 
-  deleteMatiere(id: number): void {
-    const current = this.matieres.value;
-    this.matieres.next(current.filter(m => m.id !== id));
+  deleteMatiere(id: number): Observable<any> {
+    return this.http.delete(`${this.apiUrl}/matieres/${id}`);
   }
 
   // ENSEIGNANTS
   getEnseignants(): Observable<Enseignant[]> {
-    return this.enseignants.asObservable();
+    return this.http.get<Enseignant[]>(`${this.apiUrl}/enseignants`);
   }
 
   // ATTRIBUTIONS
   getAttributions(): Observable<Attribution[]> {
-    return this.attributions.asObservable();
+    return this.http.get<any[]>(`${this.apiUrl}/attributions`).pipe(
+      map(atts => atts.map(a => this.mapAttribution(a)))
+    );
   }
 
   getAttributionsByEnseignant(id: number): Observable<Attribution[]> {
-    return this.attributions.pipe(
-      map(atts => atts.filter(a => a.enseignantId === id))
+    // Note: 'me' route is preferred for the logged-in teacher
+    return this.http.get<any[]>(`${this.apiUrl}/attributions/me`).pipe(
+      map(atts => atts.map(a => this.mapAttribution(a)))
     );
   }
 
-  getAttributionsBySemestre(s: 'S1' | 'S2' | 'S3' | 'S4'): Observable<Attribution[]> {
-    return this.attributions.pipe(
-      map(atts => atts.filter(a => a.semestre === s))
-    );
+  accepterAttribution(id: number): Observable<any> {
+    return this.http.post(`${this.apiUrl}/attributions/${id}/respond`, { statut: 'ACCEPTEE' });
   }
 
-  attribuerMatiere(attribution: Omit<Attribution, 'id' | 'statut' | 'dateAttribution'>): void {
-    const current = this.attributions.value;
-    const newId = current.length > 0 ? Math.max(...current.map(a => a.id)) + 1 : 1;
-    this.attributions.next([...current, { 
-      ...attribution, 
-      id: newId, 
-      statut: 'EN_ATTENTE', 
-      dateAttribution: new Date() 
-    }]);
+  refuserAttribution(id: number, observation: string): Observable<any> {
+    return this.http.post(`${this.apiUrl}/attributions/${id}/respond`, { statut: 'REFUSEE', observation });
   }
 
-  accepterAttribution(id: number): void {
-    const current = this.attributions.value;
-    this.attributions.next(current.map(a => a.id === id ? { 
-      ...a, 
-      statut: 'ACCEPTEE', 
-      dateReponse: new Date() 
-    } : a));
+  attribuerMatiere(attribution: any): Observable<any> {
+    return this.http.post(`${this.apiUrl}/attributions`, attribution);
   }
 
-  refuserAttribution(id: number, observation: string): void {
-    const current = this.attributions.value;
-    this.attributions.next(current.map(a => a.id === id ? { 
-      ...a, 
-      statut: 'REFUSEE', 
-      observation, 
-      dateReponse: new Date() 
-    } : a));
+  private mapAttribution(a: any): Attribution {
+    return {
+      id: a.id,
+      enseignantId: a.enseignant_id,
+      matiereId: a.matiere_id,
+      semestre: a.semestre,
+      anneeAcademique: a.annee_libelle || a.annee_academique_id.toString(),
+      heuresTotal: a.heures_total,
+      statut: a.statut,
+      observation: a.observation,
+      dateAttribution: new Date(a.date_attribution),
+      dateReponse: a.date_reponse ? new Date(a.date_reponse) : undefined,
+      matiere_nom: a.matiere_nom,
+      matiere_code: a.matiere_code
+    };
   }
 }

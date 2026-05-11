@@ -7,6 +7,7 @@ const ensCtrl = require('../controllers/enseignantController');
 const heureCtrl = require('../controllers/heureController');
 const dashCtrl = require('../controllers/dashboardController');
 const refCtrl = require('../controllers/referentielController');
+const attrCtrl = require('../controllers/attributionController');
 
 // Configuration Multer pour les avatars
 const multer = require('multer');
@@ -72,6 +73,12 @@ router.get('/enseignants/:id/heures', authMiddleware, ensCtrl.getHeures);
 router.post('/enseignants', authMiddleware, requireRole('admin', 'rh'), ensCtrl.create);
 router.put('/enseignants/:id', authMiddleware, requireRole('admin', 'rh'), ensCtrl.update);
 router.delete('/enseignants/:id', authMiddleware, requireRole('admin'), ensCtrl.delete);
+
+// ---- ATTRIBUTIONS ----
+router.get('/attributions/me', authMiddleware, requireRole('enseignant'), attrCtrl.getMyAttributions);
+router.post('/attributions/:id/respond', authMiddleware, requireRole('enseignant'), attrCtrl.respondToAttribution);
+router.get('/attributions', authMiddleware, requireRole('admin', 'rh'), attrCtrl.getAllAttributions);
+router.post('/attributions', authMiddleware, requireRole('admin', 'rh'), attrCtrl.createAttribution);
 
 // ---- HEURES ----
 router.get('/heures/pending-count', authMiddleware, heureCtrl.getPendingCount);
