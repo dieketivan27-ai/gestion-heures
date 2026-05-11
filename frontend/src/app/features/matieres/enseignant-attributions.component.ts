@@ -5,7 +5,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { GestionMatiereService } from '../../services/gestion-matiere.service';
 import { Attribution, Matiere } from '../../models/matiere.model';
 import { AuthService } from '../../core/services/auth.service';
-import { map, Observable, BehaviorSubject, combineLatest, switchMap, of, tap } from 'rxjs';
+import { map, Observable, BehaviorSubject, combineLatest, switchMap, of, tap, catchError, finalize } from 'rxjs';
 
 registerLocaleData(localeFr);
 
@@ -20,9 +20,19 @@ registerLocaleData(localeFr);
           <h1 class="text-3xl font-black text-gray-900 tracking-tight">Mes Attributions</h1>
           <p class="text-gray-500 font-medium">Gérez vos matières pour l'année académique en cours</p>
         </div>
-        <div class="bg-indigo-50 px-4 py-2 rounded-2xl border border-indigo-100">
-           <span class="text-indigo-600 font-bold text-sm">Session: {{ currentUser?.nom }} {{ currentUser?.prenom }}</span>
+        <div class="bg-indigo-50 px-4 py-2 rounded-2xl border border-indigo-100" *ngIf="currentUser">
+           <span class="text-indigo-600 font-bold text-sm">Session: {{ currentUser.nom }} {{ currentUser.prenom }}</span>
         </div>
+      </div>
+
+      <!-- Erreur -->
+      <div *ngIf="errorMessage" class="bg-rose-50 border-2 border-rose-100 p-6 rounded-3xl mb-8 flex items-center gap-4 text-rose-600">
+        <i class="fas fa-exclamation-triangle text-2xl"></i>
+        <div class="flex-1">
+          <p class="font-black">Une erreur est survenue lors du chargement</p>
+          <p class="text-sm opacity-80">{{ errorMessage }}</p>
+        </div>
+        <button (click)="retry()" class="bg-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase">Réessayer</button>
       </div>
 
       <!-- Navigation par Semestre -->
@@ -42,7 +52,7 @@ registerLocaleData(localeFr);
            <p class="text-gray-400 font-bold animate-pulse">Chargement de vos attributions...</p>
         </div>
 
-        <div *ngIf="!loading && (filteredAttributions$ | async)?.length === 0" 
+        <div *ngIf="!loading && !errorMessage && (filteredAttributions$ | async)?.length === 0" 
              class="bg-white rounded-3xl p-16 text-center border-2 border-dashed border-gray-100 shadow-sm">
           <div class="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
              <i class="fas fa-book-open text-gray-300 text-3xl"></i>
@@ -53,6 +63,7 @@ registerLocaleData(localeFr);
 
         <div *ngFor="let a of filteredAttributions$ | async" 
              class="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+          <!-- Card Content (Same as before) -->
           <div class="p-8 flex flex-wrap items-center justify-between gap-6">
             <div class="flex-1 min-w-[280px]">
               <div class="flex items-center gap-4 mb-3">
@@ -83,7 +94,6 @@ registerLocaleData(localeFr);
             </div>
 
             <div class="flex items-center gap-3">
-              <!-- Actions pour EN_ATTENTE -->
               <ng-container *ngIf="a.statut === 'EN_ATTENTE'">
                 <button (click)="onAccepter(a.id)" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-2xl font-black text-sm transition-all shadow-lg shadow-emerald-100 flex items-center gap-2">
                   <i class="fas fa-check"></i> Accepter
@@ -93,7 +103,6 @@ registerLocaleData(localeFr);
                 </button>
               </ng-container>
               
-              <!-- Date de réponse pour les autres -->
               <div *ngIf="a.statut !== 'EN_ATTENTE'" class="text-right bg-gray-50 px-6 py-3 rounded-2xl border border-gray-100">
                 <p class="text-[9px] uppercase text-gray-400 font-black tracking-tighter mb-0.5">Réponse enregistrée le</p>
                 <p class="text-sm font-black text-gray-800">{{ a.dateReponse | date:'dd MMMM yyyy':'':'fr' }}</p>
@@ -101,7 +110,7 @@ registerLocaleData(localeFr);
             </div>
           </div>
 
-          <!-- Section Refus (Textarea) -->
+          <!-- Section Refus -->
           <div *ngIf="refusingId === a.id" class="px-8 pb-8 pt-0 animate-fadeIn">
             <div class="bg-rose-50 rounded-3xl p-6 border-2 border-rose-100">
               <label class="block text-sm font-black text-rose-700 mb-3 flex items-center gap-2">
@@ -120,7 +129,7 @@ registerLocaleData(localeFr);
             </div>
           </div>
 
-          <!-- Observation si refusé -->
+          <!-- Observation -->
           <div *ngIf="a.statut === 'REFUSEE' && a.observation" class="mx-8 mb-8 p-6 bg-gray-50 rounded-2xl border border-gray-100">
             <div class="flex gap-3">
               <i class="fas fa-quote-left text-rose-200 text-xl"></i>
@@ -145,6 +154,7 @@ export class EnseignantAttributionsComponent implements OnInit {
   
   loading = true;
   processing = false;
+  errorMessage = '';
   refusingId: number | null = null;
   refusalReason = '';
   currentUser: any;
@@ -153,25 +163,38 @@ export class EnseignantAttributionsComponent implements OnInit {
     private matiereService: GestionMatiereService,
     private authService: AuthService
   ) {
-    this.currentUser = this.authService.currentUser;
-    
-    // Setup the data pipeline
-    this.attributions$ = this.refresh$.pipe(
-      switchMap(() => {
-        if (!this.currentUser?.enseignant_id) return of([]);
+    // Pipeline setup
+    this.attributions$ = combineLatest([this.authService.currentUser$, this.refresh$]).pipe(
+      switchMap(([user]) => {
+        this.currentUser = user;
+        if (!user || !user.enseignant_id) {
+          this.loading = false;
+          return of([]);
+        }
         this.loading = true;
-        return this.matiereService.getAttributionsByEnseignant(this.currentUser.enseignant_id);
-      }),
-      tap(() => this.loading = false)
+        this.errorMessage = '';
+        return this.matiereService.getAttributionsByEnseignant(user.enseignant_id).pipe(
+          catchError(err => {
+            console.error('Attribution loading error:', err);
+            let backendError = err.error?.error || err.error?.message || err.message;
+            if (typeof backendError === 'object') backendError = JSON.stringify(backendError);
+            this.errorMessage = backendError;
+            return of([]);
+          }),
+          finalize(() => this.loading = false)
+        );
+      })
     );
 
-    this.filteredAttributions$ = combineLatest([this.attributions$, this.refresh$]).pipe(
-      map(([atts]) => atts.filter(a => a.semestre === this.selectedSemestre))
+    this.filteredAttributions$ = this.attributions$.pipe(
+      map(atts => atts.filter(a => a.semestre === this.selectedSemestre))
     );
   }
 
-  ngOnInit(): void {
-    // Pipeline is already setup in constructor
+  ngOnInit(): void {}
+
+  retry() {
+    this.refresh$.next();
   }
 
   onSemestreChange(s: 'S1' | 'S2' | 'S3' | 'S4') {

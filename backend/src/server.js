@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const { runMigrations } = require('./config/migrate');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,7 +71,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
-  console.log(`📡 Environnement: ${process.env.NODE_ENV}`);
+// Run migrations then start the server
+runMigrations().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Serveur démarré sur le port ${PORT}`);
+    console.log(`📡 Environnement: ${process.env.NODE_ENV}`);
+  });
 });

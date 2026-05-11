@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Matiere, Filiere, AnneeAcademique } from '../../core/models/models';
@@ -174,11 +175,15 @@ export class MatieresComponent implements OnInit {
   search = ''; filterNiveau = ''; filterAnnee: any = null;
   niveaux = ['L1', 'L2', 'L3', 'M1', 'M2'];
 
-  constructor(private api: ApiService, private auth: AuthService) { }
+  constructor(private api: ApiService, private auth: AuthService, private router: Router) { }
   get isRH() { return this.auth.isRH; }
   get isAdmin() { return this.auth.isAdmin; }
 
   ngOnInit() {
+    if (this.auth.currentUser?.role === 'enseignant') {
+      this.router.navigate(['/enseignant/mes-matieres']);
+      return;
+    }
     this.api.getAnnees().subscribe(a => { this.annees = a; const active = a.find(x => x.is_active); this.filterAnnee = active?.id || null; this.load(); });
     this.api.getFilieres().subscribe(f => this.filieres = f);
   }

@@ -15,18 +15,34 @@ exports.getMyAttributions = async (req, res) => {
   }
 
   try {
+    console.log('--- DEBUG: getMyAttributions START ---');
+    console.log('Enseignant ID:', enseignantId);
+    
+    // Test simple query first
+    const [test] = await db.execute("SELECT 1 as test");
+    console.log('Database test successful:', test);
+
     const [rows] = await db.execute(`
-      SELECT a.*, m.intitule as matiere_nom, m.code as matiere_code, aa.libelle as annee_libelle
+      SELECT 
+        a.id, a.statut, a.heures_total, a.semestre, a.observation, a.date_attribution, a.date_reponse,
+        m.intitule as matiere_nom, m.code as matiere_code, 
+        aa.libelle as annee_libelle
       FROM attributions_matieres a
-      JOIN matieres m ON a.matiere_id = m.id
-      JOIN annees_academiques aa ON a.annee_academique_id = aa.id
+      INNER JOIN matieres m ON a.matiere_id = m.id
+      INNER JOIN annees_academiques aa ON a.annee_academique_id = aa.id
       WHERE a.enseignant_id = ?
       ORDER BY a.date_attribution DESC
     `, [enseignantId]);
 
+    console.log('Found rows:', rows.length);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+    console.error('CRITICAL ERROR in getMyAttributions:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur', 
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+    });
   }
 };
 

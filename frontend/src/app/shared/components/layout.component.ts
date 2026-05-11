@@ -71,7 +71,7 @@ import { Subscription, interval } from 'rxjs';
             <span class="sidebar-link-label flex-1">Heures effectuées</span>
             <span *ngIf="notificationCount > 0" class="sidebar-badge">{{notificationCount}}</span>
           </a>
-          <a routerLink="/matieres" routerLinkActive="active"
+          <a [routerLink]="matieresRoute" routerLinkActive="active"
              class="sidebar-link"
              [title]="sidebarCollapsed ? 'Matières' : ''"
              (click)="showMobileMenu = false">
@@ -276,12 +276,19 @@ export class LayoutComponent implements OnInit, OnDestroy {
     if (url.includes('dashboard')) this.pageTitle = 'Tableau de bord';
     else if (url.includes('enseignants')) this.pageTitle = 'Gestion des enseignants';
     else if (url.includes('heures')) this.pageTitle = 'Heures effectuées';
-    else if (url.includes('matieres')) this.pageTitle = 'Gestion des matières';
+    else if (url.includes('matieres')) {
+      this.pageTitle = this.user?.role === 'enseignant' ? 'Mes Matières' : 'Gestion des matières';
+    }
     else if (url.includes('rapports')) this.pageTitle = 'États & Rapports';
     else if (url.includes('import')) this.pageTitle = 'Importation de données';
     else if (url.includes('parametres')) this.pageTitle = 'Paramètres système';
     else if (url.includes('utilisateurs')) this.pageTitle = 'Gestion des utilisateurs';
     else if (url.includes('profile')) this.pageTitle = 'Mon Profil';
+  }
+
+  get matieresRoute(): string {
+    if (this.user?.role === 'enseignant') return '/enseignant/mes-matieres';
+    return '/matieres';
   }
 
   get isAdmin(): boolean { return this.auth.isAdmin; }
