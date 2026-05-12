@@ -69,6 +69,61 @@ import { AuthService } from '../../core/services/auth.service';
     }
     @keyframes spin { to { transform:rotate(360deg); } }
     input::-ms-reveal, input::-ms-clear { display: none; }
+
+    .demo-section {
+      margin-top: 1.8rem;
+      padding-top: 1.5rem;
+      border-top: 1px dashed #e2e8f0;
+    }
+    .demo-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.8rem;
+    }
+    .demo-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.8rem 0.5rem;
+      background: #ffffff;
+      border: 1.5px solid #f1f5f9;
+      border-radius: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      text-align: center;
+    }
+    .demo-btn:hover {
+      background: #f8fafc;
+      border-color: #3b82f6;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59,130,246,0.08);
+    }
+    .demo-btn i {
+      font-size: 1.1rem;
+      color: #3b82f6;
+      margin-bottom: 0.4rem;
+    }
+    .demo-btn-role {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 0.1rem;
+    }
+    .demo-btn-mail {
+      display: block;
+      font-size: 0.65rem;
+      color: #94a3b8;
+    }
   `],
   template: `
     <div class="auth-page">
@@ -108,6 +163,22 @@ import { AuthService } from '../../core/services/auth.service';
           <ng-container *ngIf="!loading"><i class="fas fa-sign-in-alt"></i> Connexion</ng-container>
         </button>
 
+        <div class="demo-section">
+          <div class="demo-title">Accès rapide (Démo)</div>
+          <div class="demo-grid">
+            <button type="button" class="demo-btn" (click)="fillDemo('admin@univ.ci', 'Admin@1234')">
+              <i class="fas fa-user-shield"></i>
+              <span class="demo-btn-role">Administrateur</span>
+              <span class="demo-btn-mail">admin&#64;univ.ci</span>
+            </button>
+            <button type="button" class="demo-btn" (click)="fillDemo('rh@univ.ci', 'Admin@1234')">
+              <i class="fas fa-users-cog"></i>
+              <span class="demo-btn-role">Service RH</span>
+              <span class="demo-btn-mail">rh&#64;univ.ci</span>
+            </button>
+          </div>
+        </div>
+
         <div style="text-align:center;margin-top:1.2rem">
           <a routerLink="/forgot-password" class="auth-link">Mot de passe oublié ?</a>
         </div>
@@ -125,6 +196,13 @@ export class LoginComponent {
 
   constructor(private auth: AuthService, private router: Router) {
     if (this.auth.isLoggedIn) this.router.navigate(['/dashboard']);
+  }
+
+  fillDemo(email: string, pwd: string) {
+    this.email = email;
+    this.password = pwd;
+    this.error = '';
+    this.submitted = false;
   }
 
   login() {
