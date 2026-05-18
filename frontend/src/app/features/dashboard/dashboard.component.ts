@@ -84,7 +84,9 @@ Chart.register(...registerables);
         <h1 class="text-xl font-bold text-slate-800 flex items-center gap-2">
           <i class="fas fa-chart-pie text-blue-600"></i> Tableau de bord
         </h1>
-        <p class="text-sm text-slate-500 mt-0.5">Vue d'ensemble de l'activité d'enseignement</p>
+        <p class="text-sm text-slate-500 mt-0.5">
+          Vue d'ensemble de l'activité d'enseignement <span *ngIf="userUniversityNom" class="font-bold text-blue-600">· {{userUniversityNom}}</span>
+        </p>
       </div>
       <div class="flex gap-2">
         <button *ngIf="isTeacher"
@@ -597,6 +599,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   get isTeacher() { return this.auth.currentUser?.role === 'enseignant'; }
+  get userUniversityNom(): string | undefined { return this.auth.currentUser?.university_nom; }
   getAvatarUrl(path: string | undefined) { return this.auth.getAvatarUrl(path); }
 
   get totalParType(): number {

@@ -8,6 +8,7 @@ const heureCtrl = require('../controllers/heureController');
 const dashCtrl = require('../controllers/dashboardController');
 const refCtrl = require('../controllers/referentielController');
 const attrCtrl = require('../controllers/attributionController');
+const univCtrl = require('../controllers/universityController');
 
 // Configuration Multer pour les avatars
 const multer = require('multer');
@@ -121,13 +122,19 @@ router.put('/parametres/:cle', authMiddleware, requireRole('admin'), refCtrl.upd
 
 const userCtrl = require('../controllers/userController');
 
-// ---- USERS (admin) ----
-router.get('/users', authMiddleware, requireRole('admin'), userCtrl.getUsers);
-router.post('/users', authMiddleware, requireRole('admin'), userCtrl.createUser);
-router.put('/users/:id', authMiddleware, requireRole('admin'), userCtrl.updateUser);
-router.delete('/users/:id', authMiddleware, requireRole('admin'), userCtrl.deleteUser);
-router.patch('/users/:id/toggle', authMiddleware, requireRole('admin'), userCtrl.toggleStatus);
+// ---- UNIVERSITIES (super_admin) ----
+router.get('/universities', authMiddleware, requireRole('super_admin'), univCtrl.getUniversities);
+router.post('/universities', authMiddleware, requireRole('super_admin'), univCtrl.createUniversity);
+router.put('/universities/:id', authMiddleware, requireRole('super_admin'), univCtrl.updateUniversity);
+router.delete('/universities/:id', authMiddleware, requireRole('super_admin'), univCtrl.deleteUniversity);
 
-router.get('/logs', authMiddleware, requireRole('admin'), refCtrl.getLogs);
+// ---- USERS (admin/super_admin) ----
+router.get('/users', authMiddleware, requireRole('admin', 'super_admin'), userCtrl.getUsers);
+router.post('/users', authMiddleware, requireRole('admin', 'super_admin'), userCtrl.createUser);
+router.put('/users/:id', authMiddleware, requireRole('admin', 'super_admin'), userCtrl.updateUser);
+router.delete('/users/:id', authMiddleware, requireRole('admin', 'super_admin'), userCtrl.deleteUser);
+router.patch('/users/:id/toggle', authMiddleware, requireRole('admin', 'super_admin'), userCtrl.toggleStatus);
+
+router.get('/logs', authMiddleware, requireRole('admin', 'super_admin'), refCtrl.getLogs);
 
 module.exports = router;

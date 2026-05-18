@@ -31,3 +31,11 @@ export const adminOrRhGuard: CanActivateFn = () => {
   router.navigate(['/dashboard']);
   return false;
 };
+
+export const superAdminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  if (auth.isSuperAdmin) return true;
+  router.navigate(['/dashboard']);
+  return false;
+};

@@ -3,6 +3,7 @@ import { RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd, Router } fro
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
+import { UniversityService } from '../../core/services/university.service';
 import { User } from '../../core/models/models';
 import { AvatarComponent } from './avatar.component';
 import { filter } from 'rxjs/operators';
@@ -127,6 +128,20 @@ import { Subscription, interval } from 'rxjs';
               <span class="sidebar-link-label">Journal des actions</span>
             </a>
           </div>
+
+          <!-- Super Administration -->
+          <div *ngIf="isSuperAdmin">
+            <div class="sidebar-section-label">
+              <span>Super Admin</span>
+            </div>
+            <a routerLink="/universities" routerLinkActive="active"
+               class="sidebar-link"
+               [title]="sidebarCollapsed ? 'Universités' : ''"
+               (click)="showMobileMenu = false">
+              <i class="fas fa-university sidebar-link-icon"></i>
+              <span class="sidebar-link-label">Universités</span>
+            </a>
+          </div>
         </nav>
 
         <!-- User footer -->
@@ -167,6 +182,22 @@ import { Subscription, interval } from 'rxjs';
               </div>
               <span class="topbar-title text-base font-bold uppercase tracking-tight">{{pageTitle}}</span>
             </div>
+          </div>
+
+          <!-- University Selector for Super Admin -->
+          <div *ngIf="isSuperAdmin" class="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-100 rounded-xl transition-all hover:bg-slate-100/80">
+            <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 flex-shrink-0">
+              <i class="fas fa-university text-xs"></i>
+            </div>
+            <select 
+              [value]="auth.selectedUniversityId || ''" 
+              (change)="onUniversityChange($event)"
+              class="bg-transparent border-none text-xs font-bold text-slate-700 focus:outline-none cursor-pointer max-w-[220px] pr-2">
+              <option value="">🏫 Toutes les universités</option>
+              <option *ngFor="let u of universities" [value]="u.id">
+                {{ u.sigle ? '[' + u.sigle + '] ' : '' }}{{ u.nom }}
+              </option>
+            </select>
           </div>
 
           <div class="flex items-center gap-4">
@@ -224,6 +255,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
   sidebarCollapsed = false;
   isUserMenuOpen = false;
   notificationCount = 0;
+  universities: any[] = [];
   private subs = new Subscription();
 
   get isMobile(): boolean {
@@ -238,7 +270,12 @@ export class LayoutComponent implements OnInit, OnDestroy {
     }
   }
 
-  constructor(public auth: AuthService, private api: ApiService, private router: Router) {}
+  constructor(
+    public auth: AuthService,
+    private api: ApiService,
+    private router: Router,
+    private univService: UniversityService
+  ) {}
 
   toggleSidebar() {
     if (this.isMobile) {
@@ -251,7 +288,12 @@ export class LayoutComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.subs.add(this.auth.currentUser$.subscribe(u => {
       this.user = u;
-      if (u) this.refreshNotifications();
+      if (u) {
+        this.refreshNotifications();
+        if (this.isSuperAdmin) {
+          this.loadUniversities();
+        }
+      }
     }));
 
     // Refresh on each navigation end to keep it updated
@@ -292,6 +334,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
     else if (url.includes('utilisateurs')) this.pageTitle = 'Gestion des utilisateurs';
     else if (url.includes('logs')) this.pageTitle = 'Journal des actions';
     else if (url.includes('profile')) this.pageTitle = 'Mon Profil';
+    else if (url.includes('universities')) this.pageTitle = 'Gestion des universités';
   }
 
   get matieresRoute(): string {
@@ -299,11 +342,36 @@ export class LayoutComponent implements OnInit, OnDestroy {
     return '/matieres';
   }
 
+  get isSuperAdmin(): boolean { return this.auth.isSuperAdmin; }
   get isAdmin(): boolean { return this.auth.isAdmin; }
   get isRH(): boolean { return this.auth.isRH; }
   get roleLabel(): string {
-    const roles: any = { admin: 'Administrateur', rh: 'Ressources Humaines', enseignant: 'Enseignant' };
+    const roles: any = { super_admin: 'Super Administrateur', admin: 'Administrateur', rh: 'Ressources Humaines', enseignant: 'Enseignant' };
     return roles[this.user?.role || ''] || '';
+  }
+
+  loadUniversities() {
+    this.subs.add(this.univService.getUniversities().subscribe({
+      next: (res) => this.universities = res,
+      error: () => {}
+    }));
+  }
+
+  onUniversityChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const value = select.value;
+    if (value === '') {
+      this.auth.setSelectedUniversity(null, null);
+    } else {
+      const uId = parseInt(value, 10);
+      const univ = this.universities.find(u => u.id === uId);
+      this.auth.setSelectedUniversity(uId, univ ? univ.nom : '');
+    }
+    this.refreshNotifications();
+    const currentUrl = this.router.url;
+    this.router.navigateByUrl('/', { skipLocationChange: true }).then(() => {
+      this.router.navigate([currentUrl]);
+    });
   }
 
   logout() { this.auth.logout(); }

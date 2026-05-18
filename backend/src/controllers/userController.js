@@ -7,16 +7,24 @@ const { auditLog } = require('../middleware/audit');
  */
 exports.getUsers = async (req, res) => {
   try {
-    const [rows] = await db.execute(`
-      SELECT u.id, u.email, u.role, u.is_active, u.created_at,
+    let query = `
+      SELECT u.id, u.email, u.role, u.is_active, u.created_at, u.university_id,
              COALESCE(NULLIF(u.nom, ''), e.nom) as nom,
              COALESCE(NULLIF(u.prenom, ''), e.prenom) as prenom,
              COALESCE(NULLIF(u.telephone, ''), e.telephone) as telephone,
-             e.id as enseignant_id
+             e.id as enseignant_id,
+             univ.nom as university_nom
       FROM users u
       LEFT JOIN enseignants e ON e.user_id = u.id
-      ORDER BY u.created_at DESC
-    `);
+      LEFT JOIN universities univ ON u.university_id = univ.id
+    `;
+    const params = [];
+    if (req.user.role !== 'super_admin' || req.user.university_id) {
+      query += ' WHERE u.university_id = ?';
+      params.push(req.user.university_id);
+    }
+    query += ' ORDER BY u.created_at DESC';
+    const [rows] = await db.execute(query, params);
     res.json(rows);
   } catch (err) {
     console.error('getUsers error:', err);
@@ -29,9 +37,14 @@ exports.getUsers = async (req, res) => {
  */
 exports.createUser = async (req, res) => {
   const { nom, prenom, email, role, password, telephone } = req.body;
+  const university_id = req.user.role === 'super_admin' ? req.body.university_id : req.user.university_id;
   
   if (!email || !role || !password || !nom || !prenom) {
     return res.status(400).json({ message: 'Données obligatoires manquantes' });
+  }
+
+  if (role === 'super_admin' && req.user.role !== 'super_admin') {
+    return res.status(403).json({ message: 'Seul un super_admin peut créer un compte super_admin.' });
   }
 
   const conn = await db.getConnection();
@@ -47,14 +60,10 @@ exports.createUser = async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const [userRes] = await conn.execute(
-      'INSERT INTO users (nom, prenom, email, role, password, telephone, is_active) VALUES (?,?,?,?,?,?,TRUE)',
-      [nom.toUpperCase().trim(), prenom.trim(), email.toLowerCase().trim(), role, hash, telephone || null]
+      'INSERT INTO users (nom, prenom, email, role, password, telephone, is_active, university_id) VALUES (?,?,?,?,?,?,TRUE,?)',
+      [nom.toUpperCase().trim(), prenom.trim(), email.toLowerCase().trim(), role, hash, telephone || null, university_id]
     );
     const userId = userRes.insertId;
-
-    // Note: Si c'est un enseignant, on ne crée pas de profil enseignant complet ici.
-    // L'admin devra le lier ou compléter via le menu Enseignants si nécessaire,
-    // mais pour la gestion simple des accès, la table users suffit.
 
     await conn.commit();
     await auditLog(req.user.id, 'CREATE_USER', 'users', userId, { email, role }, req.ip);
@@ -73,6 +82,7 @@ exports.createUser = async (req, res) => {
  */
 exports.updateUser = async (req, res) => {
   const { nom, prenom, email, role, is_active, telephone } = req.body;
+  const university_id = req.user.role === 'super_admin' ? req.body.university_id : req.user.university_id;
   const { id } = req.params;
 
   if (!email || !role || !nom || !prenom) {
@@ -82,6 +92,14 @@ exports.updateUser = async (req, res) => {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
+
+    if (req.user.role !== 'super_admin') {
+      const [check] = await conn.execute('SELECT university_id FROM users WHERE id = ?', [id]);
+      if (!check.length || check[0].university_id !== req.user.university_id) {
+        await conn.rollback();
+        return res.status(403).json({ message: 'Accès interdit' });
+      }
+    }
     
     // Vérifier l'email
     const [existing] = await conn.execute('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
@@ -92,14 +110,14 @@ exports.updateUser = async (req, res) => {
 
     // Mise à jour users
     await conn.execute(
-      'UPDATE users SET nom=?, prenom=?, email=?, role=?, is_active=?, telephone=? WHERE id=?',
-      [nom.toUpperCase().trim(), prenom.trim(), email.toLowerCase().trim(), role, is_active, telephone || null, id]
+      'UPDATE users SET nom=?, prenom=?, email=?, role=?, is_active=?, telephone=?, university_id=? WHERE id=?',
+      [nom.toUpperCase().trim(), prenom.trim(), email.toLowerCase().trim(), role, is_active, telephone || null, university_id, id]
     );
 
     // Sync avec enseignants si existant
     await conn.execute(
-      'UPDATE enseignants SET nom=?, prenom=?, email=?, telephone=? WHERE user_id=?',
-      [nom.toUpperCase().trim(), prenom.trim(), email.toLowerCase().trim(), telephone || null, id]
+      'UPDATE enseignants SET nom=?, prenom=?, email=?, telephone=?, university_id=? WHERE user_id=?',
+      [nom.toUpperCase().trim(), prenom.trim(), email.toLowerCase().trim(), telephone || null, university_id, id]
     );
 
     await conn.commit();
@@ -128,8 +146,15 @@ exports.deleteUser = async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    // 1. Supprimer l'enseignant associé (les FK s'occupent du reste ou on le fait explicitement)
-    // On le fait explicitement pour être sûr
+    if (req.user.role !== 'super_admin') {
+      const [check] = await conn.execute('SELECT university_id FROM users WHERE id = ?', [id]);
+      if (!check.length || check[0].university_id !== req.user.university_id) {
+        await conn.rollback();
+        return res.status(403).json({ message: 'Accès interdit' });
+      }
+    }
+
+    // 1. Supprimer l'enseignant associé
     await conn.execute('DELETE FROM enseignants WHERE user_id = ?', [id]);
     
     // 2. Supprimer l'utilisateur
@@ -163,6 +188,13 @@ exports.toggleStatus = async (req, res) => {
   }
 
   try {
+    if (req.user.role !== 'super_admin') {
+      const [check] = await db.execute('SELECT university_id FROM users WHERE id = ?', [id]);
+      if (!check.length || check[0].university_id !== req.user.university_id) {
+        return res.status(403).json({ message: 'Accès interdit' });
+      }
+    }
+
     await db.execute('UPDATE users SET is_active = NOT is_active WHERE id = ?', [id]);
     await auditLog(req.user.id, 'TOGGLE_USER_STATUS', 'users', id, {}, req.ip);
     res.json({ message: 'Statut mis à jour' });

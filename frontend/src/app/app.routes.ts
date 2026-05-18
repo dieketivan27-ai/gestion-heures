@@ -1,5 +1,5 @@
 import { Router, Routes } from '@angular/router';
-import { authGuard, adminGuard, adminOrRhGuard } from './core/guards/auth.guard';
+import { authGuard, adminGuard, adminOrRhGuard, superAdminGuard } from './core/guards/auth.guard';
 import { passwordChangeGuard } from './core/guards/password-change.guard';
 import { inject } from '@angular/core';
 import { AuthService } from './core/services/auth.service';
@@ -37,6 +37,10 @@ export const routes: Routes = [
       { path: 'logs',
         loadComponent: () => import('./features/logs/logs.component').then(m => m.LogsComponent),
         canActivate: [adminGuard]
+      },
+      { path: 'universities',
+        loadComponent: () => import('./features/universities/universities.component').then(m => m.UniversitiesComponent),
+        canActivate: [superAdminGuard]
       },
       { path: 'admin/matieres', loadComponent: () => import('./features/matieres/admin-matieres.component').then(m => m.AdminMatieresComponent) },
       { path: 'admin/attributions', loadComponent: () => import('./features/matieres/admin-attributions.component').then(m => m.AdminAttributionsComponent) },

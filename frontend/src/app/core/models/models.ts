@@ -1,7 +1,7 @@
 export interface User {
   id: number;
   email: string;
-  role: 'admin' | 'rh' | 'enseignant';
+  role: 'super_admin' | 'admin' | 'rh' | 'enseignant';
   nom?: string;
   prenom?: string;
   telephone?: string;
@@ -10,6 +10,17 @@ export interface User {
   is_active: boolean;
   created_at?: string;
   must_change_password?: boolean;
+  university_id?: number;
+  university_nom?: string;
+}
+
+export interface University {
+  id: number;
+  nom: string;
+  sigle?: string;
+  nb_enseignants?: number;
+  nb_utilisateurs?: number;
+  created_at?: string;
 }
 
 export interface AuthResponse {

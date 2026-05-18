@@ -8,9 +8,20 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
   const token = auth.token;
-  const authReq = token
-    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+
+  let headers: { [key: string]: string } = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  if (auth.isSuperAdmin && auth.selectedUniversityId !== null) {
+    headers['X-University-Id'] = auth.selectedUniversityId.toString();
+  }
+
+  const authReq = Object.keys(headers).length > 0
+    ? req.clone({ setHeaders: headers })
     : req;
+
   return next(authReq).pipe(
     catchError(err => {
       if (err.status === 401) { auth.logout(); }

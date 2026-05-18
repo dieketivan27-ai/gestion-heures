@@ -1,10 +1,10 @@
 const db = require('../config/database');
 const { auditLog } = require('../middleware/audit');
 
-const getEquivalence = async (type) => {
+const getEquivalence = async (type, university_id) => {
   const keys = { CM: 'equivalence_cm_td', TD: null, TP: 'equivalence_cm_tp' };
   if (!keys[type]) return 1;
-  const [rows] = await db.execute('SELECT valeur FROM parametres WHERE cle = ?', [keys[type]]);
+  const [rows] = await db.execute('SELECT valeur FROM parametres WHERE cle = ? AND university_id = ?', [keys[type], university_id]);
   return rows.length ? parseFloat(rows[0].valeur) : 1;
 };
 
@@ -17,9 +17,10 @@ const recalculateComplementaryStatus = async (enseignant_id, annee_id) => {
     }
     return;
   }
-  // Récupérer le seuil
-  const [ens] = await db.execute('SELECT heures_contractuelles FROM enseignants WHERE id=?', [enseignant_id]);
+  // Récupérer le seuil et l'université
+  const [ens] = await db.execute('SELECT heures_contractuelles, university_id FROM enseignants WHERE id=?', [enseignant_id]);
   const seuil = ens.length ? ens[0].heures_contractuelles : 192;
+  const university_id = ens.length ? ens[0].university_id : 1;
 
   // Récupérer toutes les heures de l'enseignant pour cette année, par date
   const [heures] = await db.execute(
@@ -50,6 +51,11 @@ exports.getAll = async (req, res) => {
     } else if (enseignant_id) {
       where.push('h.enseignant_id = ?');
       params.push(enseignant_id);
+    }
+
+    if (req.user.role !== 'super_admin' || req.user.university_id) {
+      where.push('h.university_id = ?');
+      params.push(req.user.university_id);
     }
 
     if (annee_id && annee_id !== 'ALL') { where.push('h.annee_academique_id = ?'); params.push(annee_id); }
@@ -93,6 +99,10 @@ exports.getById = async (req, res) => {
       return res.status(403).json({ message: 'Accès interdit - Vous ne pouvez consulter que vos propres heures.' });
     }
 
+    if (req.user.role !== 'super_admin' && rows[0].university_id !== req.user.university_id) {
+      return res.status(403).json({ message: 'Accès interdit' });
+    }
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
@@ -103,21 +113,26 @@ exports.create = async (req, res) => {
   const { enseignant_id, matiere_id, annee_academique_id, date_cours,
           type_heure, duree, salle, observations } = req.body;
   try {
+    // Récupérer l'université de l'enseignant
+    const [ens] = await db.execute('SELECT university_id FROM enseignants WHERE id = ?', [enseignant_id]);
+    if (!ens.length) return res.status(404).json({ message: 'Enseignant introuvable' });
+    const university_id = ens[0].university_id;
+
     let duree_equivalente = parseFloat(duree);
     if (type_heure === 'TD') {
-      const [p] = await db.execute("SELECT valeur FROM parametres WHERE cle='equivalence_cm_td'");
-      duree_equivalente = p.length ? (duree / parseFloat(p[0].valeur)).toFixed(2) : duree;
+      const coef = await getEquivalence('TD', university_id);
+      duree_equivalente = (duree / coef).toFixed(2);
     } else if (type_heure === 'TP') {
-      const [p] = await db.execute("SELECT valeur FROM parametres WHERE cle='equivalence_cm_tp'");
-      duree_equivalente = p.length ? (duree / parseFloat(p[0].valeur)).toFixed(2) : duree;
+      const coef = await getEquivalence('TP', university_id);
+      duree_equivalente = (duree / coef).toFixed(2);
     }
 
     const [result] = await db.execute(
       `INSERT INTO heures_effectuees (enseignant_id, matiere_id, annee_academique_id, date_cours,
-        type_heure, duree, duree_equivalente, salle, observations)
-       VALUES (?,?,?,?,?,?,?,?,?)`,
+        type_heure, duree, duree_equivalente, salle, observations, university_id)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
       [enseignant_id, matiere_id || null, annee_academique_id, date_cours,
-       type_heure, duree, duree_equivalente, salle || null, observations || null]
+       type_heure, duree, duree_equivalente, salle || null, observations || null, university_id]
     );
     
     await recalculateComplementaryStatus(enseignant_id, annee_academique_id);
@@ -132,17 +147,22 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   const { date_cours, type_heure, duree, salle, observations, matiere_id } = req.body;
   try {
-    let duree_equivalente = parseFloat(duree);
-    if (type_heure === 'TD') {
-      const [p] = await db.execute("SELECT valeur FROM parametres WHERE cle='equivalence_cm_td'");
-      duree_equivalente = p.length ? (duree / parseFloat(p[0].valeur)).toFixed(2) : duree;
-    } else if (type_heure === 'TP') {
-      const [p] = await db.execute("SELECT valeur FROM parametres WHERE cle='equivalence_cm_tp'");
-      duree_equivalente = p.length ? (duree / parseFloat(p[0].valeur)).toFixed(2) : duree;
+    const [old] = await db.execute('SELECT enseignant_id, annee_academique_id, university_id FROM heures_effectuees WHERE id=?', [req.params.id]);
+    if (!old.length) return res.status(404).json({ message: 'Heure introuvable' });
+    const { enseignant_id, annee_academique_id, university_id } = old[0];
+
+    if (req.user.role !== 'super_admin' && university_id !== req.user.university_id) {
+      return res.status(403).json({ message: 'Accès interdit' });
     }
 
-    const [old] = await db.execute('SELECT enseignant_id, annee_academique_id FROM heures_effectuees WHERE id=?', [req.params.id]);
-    if (!old.length) return res.status(404).json({ message: 'Heure introuvable' });
+    let duree_equivalente = parseFloat(duree);
+    if (type_heure === 'TD') {
+      const coef = await getEquivalence('TD', university_id);
+      duree_equivalente = (duree / coef).toFixed(2);
+    } else if (type_heure === 'TP') {
+      const coef = await getEquivalence('TP', university_id);
+      duree_equivalente = (duree / coef).toFixed(2);
+    }
 
     await db.execute(
       `UPDATE heures_effectuees SET date_cours=?, type_heure=?, duree=?, duree_equivalente=?,
@@ -151,7 +171,7 @@ exports.update = async (req, res) => {
        matiere_id || null, req.params.id]
     );
     
-    await recalculateComplementaryStatus(old[0].enseignant_id, old[0].annee_academique_id);
+    await recalculateComplementaryStatus(enseignant_id, annee_academique_id);
     
     await auditLog(req.user.id, 'UPDATE', 'heures_effectuees', req.params.id, req.body, req.ip);
     res.json({ message: 'Heures mises à jour' });
@@ -162,12 +182,18 @@ exports.update = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    const [old] = await db.execute('SELECT enseignant_id, annee_academique_id FROM heures_effectuees WHERE id=?', [req.params.id]);
-    if (old.length) {
-      await db.execute('DELETE FROM heures_effectuees WHERE id=?', [req.params.id]);
-      await recalculateComplementaryStatus(old[0].enseignant_id, old[0].annee_academique_id);
-      await auditLog(req.user.id, 'DELETE', 'heures_effectuees', req.params.id, {}, req.ip);
+    const [old] = await db.execute('SELECT enseignant_id, annee_academique_id, university_id FROM heures_effectuees WHERE id=?', [req.params.id]);
+    if (!old.length) return res.status(404).json({ message: 'Heure introuvable' });
+    const { enseignant_id, annee_academique_id, university_id } = old[0];
+
+    if (req.user.role !== 'super_admin' && university_id !== req.user.university_id) {
+      return res.status(403).json({ message: 'Accès interdit' });
     }
+
+    await db.execute('DELETE FROM heures_effectuees WHERE id=?', [req.params.id]);
+    await recalculateComplementaryStatus(enseignant_id, annee_academique_id);
+    await auditLog(req.user.id, 'DELETE', 'heures_effectuees', req.params.id, {}, req.ip);
+    
     res.json({ message: 'Heure supprimée' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
@@ -176,6 +202,13 @@ exports.delete = async (req, res) => {
 
 exports.valider = async (req, res) => {
   try {
+    const [old] = await db.execute('SELECT university_id FROM heures_effectuees WHERE id=?', [req.params.id]);
+    if (!old.length) return res.status(404).json({ message: 'Heure introuvable' });
+    
+    if (req.user.role !== 'super_admin' && old[0].university_id !== req.user.university_id) {
+      return res.status(403).json({ message: 'Accès interdit' });
+    }
+
     await db.execute(
       'UPDATE heures_effectuees SET valide=1, valide_par=?, valide_le=NOW() WHERE id=?',
       [req.user.id, req.params.id]
@@ -194,6 +227,11 @@ exports.getPendingCount = async (req, res) => {
     if (req.user.role === 'enseignant') {
       query += ' AND enseignant_id = ?';
       params.push(req.user.enseignant_id);
+    }
+
+    if (req.user.role !== 'super_admin' || req.user.university_id) {
+      query += ' AND university_id = ?';
+      params.push(req.user.university_id);
     }
     
     const [rows] = await db.execute(query, params);

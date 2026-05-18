@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserService } from '../../core/services/user.service';
 import { AuthService } from '../../core/services/auth.service';
-import { User } from '../../core/models/models';
+import { UniversityService } from '../../core/services/university.service';
+import { User, University } from '../../core/models/models';
 import { AvatarComponent } from '../../shared/components/avatar.component';
 
 @Component({
@@ -39,6 +40,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
           <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Rôle:</span>
           <select class="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" [(ngModel)]="roleFilter" (change)="applyFilters()">
             <option value="ALL">Tous les rôles</option>
+            <option value="super_admin" *ngIf="isSuperAdmin">Super Admin</option>
             <option value="admin">Administrateur</option>
             <option value="rh">Ressources Humaines</option>
             <option value="enseignant">Enseignant</option>
@@ -63,6 +65,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
             <tr class="bg-slate-50 border-b border-slate-100">
               <th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Utilisateur</th>
               <th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Rôle</th>
+              <th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider" *ngIf="isSuperAdmin">Université</th>
               <th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Statut</th>
               <th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Date création</th>
               <th class="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
@@ -70,12 +73,12 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
           </thead>
           <tbody class="divide-y divide-slate-50">
             <tr *ngIf="loading">
-              <td colspan="5" class="px-4 py-12 text-center">
+              <td [attr.colspan]="isSuperAdmin ? 6 : 5" class="px-4 py-12 text-center">
                 <div class="spinner mx-auto"></div>
               </td>
             </tr>
             <tr *ngIf="!loading && filteredUsers.length === 0">
-              <td colspan="5" class="px-4 py-12 text-center text-slate-400">
+              <td [attr.colspan]="isSuperAdmin ? 6 : 5" class="px-4 py-12 text-center text-slate-400">
                 <i class="fas fa-user-slash text-4xl mb-3 opacity-20 block"></i>
                 Aucun utilisateur trouvé
               </td>
@@ -97,6 +100,9 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
                 <span [ngClass]="getRoleClass(u.role)" class="px-2 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider">
                   {{getRoleLabel(u.role)}}
                 </span>
+              </td>
+              <td class="px-4 py-3 text-slate-600 text-xs font-semibold" *ngIf="isSuperAdmin">
+                {{ u.university_nom || '-' }}
               </td>
               <td class="px-4 py-3">
                 <button (click)="toggleStatus(u)" [disabled]="u.id === currentUser?.id"
@@ -181,6 +187,14 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
                 <option value="enseignant">Enseignant</option>
                 <option value="rh">Ressources Humaines</option>
                 <option value="admin">Administrateur</option>
+                <option value="super_admin" *ngIf="isSuperAdmin">Super Administrateur</option>
+              </select>
+            </div>
+            
+            <div class="form-group md:col-span-2" *ngIf="isSuperAdmin">
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Université *</label>
+              <select class="form-control" [(ngModel)]="form.university_id">
+                <option *ngFor="let univ of universities" [value]="univ.id">{{univ.nom}}</option>
               </select>
             </div>
             
@@ -233,6 +247,7 @@ import { AvatarComponent } from '../../shared/components/avatar.component';
 export class UtilisateursComponent implements OnInit {
   users: User[] = [];
   filteredUsers: User[] = [];
+  universities: University[] = [];
   loading = true;
   saving = false;
   
@@ -249,13 +264,16 @@ export class UtilisateursComponent implements OnInit {
 
   constructor(
     private userService: UserService,
-    private auth: AuthService
+    private auth: AuthService,
+    private universityService: UniversityService
   ) {}
 
   get currentUser() { return this.auth.currentUser; }
+  get isSuperAdmin(): boolean { return this.auth.isSuperAdmin; }
 
   ngOnInit() {
     this.loadUsers();
+    this.loadUniversities();
   }
 
   loadUsers() {
@@ -271,6 +289,20 @@ export class UtilisateursComponent implements OnInit {
         this.loading = false;
       }
     });
+  }
+
+  loadUniversities() {
+    if (this.isSuperAdmin) {
+      this.universityService.getUniversities().subscribe({
+        next: (data) => {
+          this.universities = data;
+          if (data.length > 0 && !this.form.university_id) {
+            this.form.university_id = data[0].id;
+          }
+        },
+        error: (err) => console.error(err)
+      });
+    }
   }
 
   applyFilters() {
@@ -292,12 +324,13 @@ export class UtilisateursComponent implements OnInit {
   }
 
   getRoleLabel(role: string): string {
-    const labels: any = { admin: 'Admin', rh: 'RH', enseignant: 'Enseignant' };
+    const labels: any = { super_admin: 'Super Admin', admin: 'Admin', rh: 'RH', enseignant: 'Enseignant' };
     return labels[role] || role;
   }
 
   getRoleClass(role: string): string {
     const classes: any = {
+      super_admin: 'bg-rose-50 text-rose-700 border border-rose-100',
       admin: 'bg-indigo-50 text-indigo-700',
       rh: 'bg-purple-50 text-purple-700',
       enseignant: 'bg-blue-50 text-blue-700'
@@ -310,7 +343,11 @@ export class UtilisateursComponent implements OnInit {
     if (u) {
       this.form = { ...u };
     } else {
-      this.form = { role: 'enseignant', is_active: true };
+      this.form = { 
+        role: 'enseignant', 
+        is_active: true, 
+        university_id: this.universities.length > 0 ? this.universities[0].id : 1 
+      };
     }
     this.formError = '';
     this.showModal = true;
@@ -319,6 +356,11 @@ export class UtilisateursComponent implements OnInit {
   save() {
     if (!this.form.nom || !this.form.prenom || !this.form.email || (!this.editingUser && !this.form.password)) {
       this.formError = 'Veuillez remplir tous les champs obligatoires (*)';
+      return;
+    }
+
+    if (this.isSuperAdmin && !this.form.university_id) {
+      this.formError = 'Veuillez sélectionner une université';
       return;
     }
 

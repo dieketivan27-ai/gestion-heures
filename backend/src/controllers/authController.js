@@ -12,10 +12,12 @@ exports.login = async (req, res) => {
 
   try {
     const [rows] = await db.execute(
-      `SELECT u.id, u.email, u.password, u.role, u.is_active, u.nom, u.prenom, u.telephone, u.avatar_url, u.must_change_password,
-              e.id as enseignant_id
+      `SELECT u.id, u.email, u.password, u.role, u.is_active, u.nom, u.prenom, u.telephone, u.avatar_url, u.must_change_password, u.university_id,
+              e.id as enseignant_id,
+              univ.nom as university_nom
        FROM users u
        LEFT JOIN enseignants e ON e.user_id = u.id
+       LEFT JOIN universities univ ON u.university_id = univ.id
        WHERE u.email = ? AND u.is_active = 1`,
       [email]
     );
@@ -33,6 +35,7 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role,
         enseignant_id: user.enseignant_id,
+        university_id: user.university_id,
         must_change_password: user.must_change_password
       },
       process.env.JWT_SECRET,
@@ -52,6 +55,8 @@ exports.login = async (req, res) => {
         telephone: user.telephone || '',
         avatar_url: user.avatar_url,
         enseignant_id: user.enseignant_id,
+        university_id: user.university_id,
+        university_nom: user.university_nom || '',
         must_change_password: !!user.must_change_password
       }
     });
@@ -102,10 +107,12 @@ exports.changeFirstPassword = async (req, res) => {
 exports.me = async (req, res) => {
   try {
     const [rows] = await db.execute(
-      `SELECT u.id, u.email, u.role, u.avatar_url, u.nom, u.prenom, u.telephone, 
-              e.id as enseignant_id, e.grade, e.statut, e.departement_id
+      `SELECT u.id, u.email, u.role, u.avatar_url, u.nom, u.prenom, u.telephone, u.university_id,
+              e.id as enseignant_id, e.grade, e.statut, e.departement_id,
+              univ.nom as university_nom
        FROM users u 
        LEFT JOIN enseignants e ON e.user_id = u.id 
+       LEFT JOIN universities univ ON u.university_id = univ.id
        WHERE u.id = ?`,
       [req.user.id]
     );

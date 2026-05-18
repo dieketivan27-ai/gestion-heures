@@ -86,20 +86,21 @@ import { AuthService } from '../../core/services/auth.service';
     }
     .demo-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.8rem;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
     }
     .demo-btn {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 0.8rem 0.5rem;
+      padding: 0.6rem 0.3rem;
       background: #ffffff;
       border: 1.5px solid #f1f5f9;
       border-radius: 0.8rem;
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       text-align: center;
+      min-width: 0;
     }
     .demo-btn:hover {
       background: #f8fafc;
@@ -114,15 +115,23 @@ import { AuthService } from '../../core/services/auth.service';
     }
     .demo-btn-role {
       display: block;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
       color: #334155;
       margin-bottom: 0.1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
     }
     .demo-btn-mail {
       display: block;
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       color: #94a3b8;
+      width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   `],
   template: `
@@ -166,13 +175,18 @@ import { AuthService } from '../../core/services/auth.service';
         <div class="demo-section">
           <div class="demo-title">Accès rapide (Démo)</div>
           <div class="demo-grid">
-            <button type="button" class="demo-btn" (click)="fillDemo('admin@univ.ci', 'Admin@1234')">
-              <i class="fas fa-user-shield"></i>
-              <span class="demo-btn-role">Administrateur</span>
+            <button type="button" class="demo-btn" (click)="fillDemo('superadmin@gestion.univ', 'Admin@1234')" title="Super Administrateur">
+              <i class="fas fa-university" style="color:#f43f5e"></i>
+              <span class="demo-btn-role">Super Admin</span>
+              <span class="demo-btn-mail">superadmin</span>
+            </button>
+            <button type="button" class="demo-btn" (click)="fillDemo('admin@univ.ci', 'Admin@1234')" title="Administrateur">
+              <i class="fas fa-user-shield" style="color:#3b82f6"></i>
+              <span class="demo-btn-role">Admin</span>
               <span class="demo-btn-mail">admin&#64;univ.ci</span>
             </button>
-            <button type="button" class="demo-btn" (click)="fillDemo('rh@univ.ci', 'Admin@1234')">
-              <i class="fas fa-users-cog"></i>
+            <button type="button" class="demo-btn" (click)="fillDemo('rh@univ.ci', 'Admin@1234')" title="Service RH">
+              <i class="fas fa-users-cog" style="color:#a855f7"></i>
               <span class="demo-btn-role">Service RH</span>
               <span class="demo-btn-mail">rh&#64;univ.ci</span>
             </button>
