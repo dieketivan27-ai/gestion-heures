@@ -27,7 +27,7 @@ export const adminGuard: CanActivateFn = () => {
 export const adminOrRhGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  if (auth.isAdmin || auth.isRH) return true;
+  if ((auth.isAdmin || auth.isRH) && !auth.isSuperAdmin) return true;
   router.navigate(['/dashboard']);
   return false;
 };

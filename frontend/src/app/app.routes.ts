@@ -23,7 +23,10 @@ export const routes: Routes = [
       { path: 'enseignants/:id', loadComponent: () => import('./features/enseignants/enseignant-detail.component').then(m => m.EnseignantDetailComponent) },
       { path: 'heures', loadComponent: () => import('./features/heures/heures.component').then(m => m.HeuresComponent) },
       { path: 'matieres', loadComponent: () => import('./features/matieres/matieres.component').then(m => m.MatieresComponent) },
-      { path: 'rapports', loadComponent: () => import('./features/rapports/rapports.component').then(m => m.RapportsComponent) },
+      { path: 'rapports', 
+        loadComponent: () => import('./features/rapports/rapports.component').then(m => m.RapportsComponent),
+        canActivate: [adminOrRhGuard]
+      },
       { path: 'parametres', loadComponent: () => import('./features/parametres/parametres.component').then(m => m.ParametresComponent) },
       { path: 'profile', loadComponent: () => import('./features/profile/profile.component').then(m => m.ProfileComponent) },
       { path: 'utilisateurs', 

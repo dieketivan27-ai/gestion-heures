@@ -81,7 +81,7 @@ import { Subscription, interval } from 'rxjs';
           </a>
 
           <!-- Rapports -->
-          <div *ngIf="isRH">
+          <div *ngIf="isRH && !isSuperAdmin">
             <div class="sidebar-section-label">
               <span>Rapports</span>
             </div>
