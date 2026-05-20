@@ -92,9 +92,9 @@ router.patch('/heures/:id/valider', authMiddleware, requireRole('admin', 'rh'), 
 
 // ---- DASHBOARD & RAPPORTS ----
 router.get('/dashboard', authMiddleware, dashCtrl.getDashboard);
-router.get('/rapports/paiement', authMiddleware, requireRole('admin', 'rh'), dashCtrl.getEtatPaiement);
-router.post('/rapports/import-excel', authMiddleware, requireRole('admin', 'rh'), uploadExcel.single('file'), dashCtrl.importExcel);
-router.post('/rapports/import-json', authMiddleware, requireRole('admin', 'rh'), dashCtrl.importJson);
+router.get('/rapports/paiement', authMiddleware, requireRole('admin', 'rh', 'super_admin'), dashCtrl.getEtatPaiement);
+router.post('/rapports/import-excel', authMiddleware, requireRole('admin', 'rh', 'super_admin'), uploadExcel.single('file'), dashCtrl.importExcel);
+router.post('/rapports/import-json', authMiddleware, requireRole('admin', 'rh', 'super_admin'), dashCtrl.importJson);
 
 // ---- RÉFÉRENTIELS ----
 router.get('/departements', authMiddleware, refCtrl.getDepartements);

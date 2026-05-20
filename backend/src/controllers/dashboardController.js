@@ -413,7 +413,7 @@ exports.importExcel = async (req, res) => {
             [nom, grade, statut, deptId, enseignantId]
           );
         } else {
-          const tempEmail = `${matricule.toLowerCase()}@import.excel`;
+          const tempEmail = `${matricule.toLowerCase()}.u${university_id}@import.excel`;
           const tempPassword = 'Temp' + Math.floor(1000 + Math.random() * 9000);
           const hash = await bcrypt.hash(tempPassword, 10);
           
@@ -530,13 +530,13 @@ exports.importJson = async (req, res) => {
             [nom, grade, statut, deptId, enseignantId]
           );
         } else {
-          const tempEmail = `${matricule.toLowerCase()}@import.excel`;
+          const tempEmail = `${matricule.toLowerCase()}.u${university_id}@import.excel`;
           const tempPassword = 'Temp' + Math.floor(1000 + Math.random() * 9000);
           const hash = await bcrypt.hash(tempPassword, 10);
           const [userRes] = await conn.execute('INSERT INTO users (email, password, role, must_change_password, university_id) VALUES (?,?,?,TRUE,?)', [tempEmail, hash, 'enseignant', university_id]);
           const [newEns] = await conn.execute(
             `INSERT INTO enseignants (user_id, matricule, nom, prenom, email, grade, statut, departement_id, heures_contractuelles, university_id)
-             VALUES (?,?,?,?,?,?,?,?,?)`,
+             VALUES (?,?,?,?,?,?,?,?,?,?)`,
             [userRes.insertId, matricule, nom, '', tempEmail, grade, statut, deptId, statut === 'Vacataire' ? 0 : 192, university_id]
           );
           enseignantId = newEns.insertId;
@@ -557,7 +557,11 @@ exports.importJson = async (req, res) => {
           }
         }
         importedCount++;
-      } catch (e) { errorCount++; errors.push(`${matricule}: ${e.message}`); }
+      } catch (e) {
+        console.error(`[ImportJSON Error] Row for ${matricule} failed:`, e);
+        errorCount++;
+        errors.push(`${matricule}: ${e.message}`);
+      }
     }
     await conn.commit();
     res.json({ importedCount, errorCount, errors });

@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const { auditLog } = require('../middleware/audit');
+const bcrypt = require('bcrypt');
 
 exports.getUniversities = async (req, res) => {
   try {
@@ -43,92 +44,41 @@ exports.createUniversity = async (req, res) => {
       ('seuil_heures_complementaires_vacataire', '0', 'Seuil heures complémentaires pour vacataires', ?)
     `, [universityId, universityId, universityId, universityId]);
 
-    // Helper for scoped emails
-    const makeScopedEmail = (originalEmail, sigleText, suffixId) => {
-      const parts = originalEmail.split('@');
-      if (parts.length !== 2) return originalEmail;
-      const username = parts[0];
-      const domain = parts[1];
-      const slug = (sigleText || `univ${suffixId}`).toLowerCase().replace(/[^a-z0-9]/g, '');
-      return `${username}.${slug}@${domain}`;
-    };
-
     const sigleSlug = (sigle?.toUpperCase().trim() || `U${universityId}`).replace(/[^A-Z0-9]/g, '');
 
     // 1. Clone default departments of university 1
     const [defaultDepts] = await conn.execute('SELECT id, nom, code FROM departements WHERE university_id = 1 OR university_id IS NULL');
-    const deptMap = {}; // { oldDeptId: newDeptId }
     for (const dept of defaultDepts) {
       const newCode = `${dept.code}-${sigleSlug}`.substring(0, 20);
-      const [deptRes] = await conn.execute(
+      await conn.execute(
         'INSERT INTO departements (nom, code, university_id) VALUES (?, ?, ?)',
         [dept.nom, newCode, universityId]
       );
-      deptMap[dept.id] = deptRes.insertId;
     }
 
-    // 2. Clone default users of university 1
-    const [defaultUsers] = await conn.execute(
-      'SELECT id, email, password, role, nom, prenom, telephone, avatar_url, is_active, must_change_password FROM users WHERE (university_id = 1 OR university_id IS NULL) AND role IN (\'admin\', \'rh\', \'enseignant\')'
+    // 2. Create base admin and rh accounts for the new university with default password Admin@123
+    const defaultPasswordHash = await bcrypt.hash('Admin@123', 10);
+    const domain = sigleSlug ? `${sigleSlug.toLowerCase()}.edu` : `univ${universityId}.edu`;
+    const adminEmail = `admin@${domain}`;
+    const rhEmail = `rh@${domain}`;
+
+    await conn.execute(
+      `INSERT INTO users (email, password, role, nom, prenom, is_active, must_change_password, university_id)
+       VALUES (?, ?, 'admin', 'Admin', 'Base', 1, 1, ?)`,
+      [adminEmail, defaultPasswordHash, universityId]
     );
-    const userMap = {}; // { oldUserId: newUserId }
-    for (const usr of defaultUsers) {
-      const newEmail = makeScopedEmail(usr.email, sigleSlug, universityId);
-      const [usrRes] = await conn.execute(
-        `INSERT INTO users (email, password, role, nom, prenom, telephone, avatar_url, is_active, must_change_password, university_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          newEmail,
-          usr.password,
-          usr.role,
-          usr.nom,
-          usr.prenom,
-          usr.telephone,
-          usr.avatar_url,
-          usr.is_active,
-          usr.must_change_password,
-          universityId
-        ]
-      );
-      userMap[usr.id] = usrRes.insertId;
-    }
 
-    // 3. Clone default enseignants of university 1
-    const [defaultTeachers] = await conn.execute(
-      'SELECT id, user_id, matricule, nom, prenom, email, telephone, grade, statut, departement_id, taux_horaire_cm, taux_horaire_td, taux_horaire_tp, heures_contractuelles FROM enseignants WHERE university_id = 1 OR university_id IS NULL'
+    await conn.execute(
+      `INSERT INTO users (email, password, role, nom, prenom, is_active, must_change_password, university_id)
+       VALUES (?, ?, 'rh', 'RH', 'Base', 1, 1, ?)`,
+      [rhEmail, defaultPasswordHash, universityId]
     );
-    for (const t of defaultTeachers) {
-      const newEmail = makeScopedEmail(t.email, sigleSlug, universityId);
-      const newUserId = t.user_id ? userMap[t.user_id] : null;
-      const newDeptId = t.departement_id ? deptMap[t.departement_id] : null;
-      const newMatricule = t.matricule ? `${t.matricule}-${sigleSlug}`.substring(0, 50) : null;
-
-      await conn.execute(
-        `INSERT INTO enseignants (user_id, matricule, nom, prenom, email, telephone, grade, statut, departement_id, taux_horaire_cm, taux_horaire_td, taux_horaire_tp, heures_contractuelles, university_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          newUserId,
-          newMatricule,
-          t.nom,
-          t.prenom,
-          newEmail,
-          t.telephone,
-          t.grade,
-          t.statut,
-          newDeptId,
-          t.taux_horaire_cm,
-          t.taux_horaire_td,
-          t.taux_horaire_tp,
-          t.heures_contractuelles,
-          universityId
-        ]
-      );
-    }
 
     await conn.commit();
     await auditLog(req.user.id, 'CREATE_UNIVERSITY', 'universities', universityId, { nom, sigle }, req.ip);
     res.status(201).json({ id: universityId, message: 'Université créée avec succès' });
   } catch (err) {
+    console.error('Erreur lors de la création de l\'université:', err);
     await conn.rollback();
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   } finally {

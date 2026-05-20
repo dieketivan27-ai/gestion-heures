@@ -161,6 +161,35 @@ async function runMigrations() {
     `);
     console.log('    ✅ Super Administrateur par défaut inséré (superadmin@gestion.univ / Admin@1234)');
 
+    // 7. Ajuster la clé unique de matricule sur enseignants
+    try {
+      const [ensKeyCheck] = await conn.execute(`
+        SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enseignants' AND INDEX_NAME = 'matricule'
+      `);
+      if (ensKeyCheck.length > 0) {
+        await conn.execute(`ALTER TABLE enseignants DROP INDEX matricule`);
+        await conn.execute(`ALTER TABLE enseignants ADD UNIQUE KEY uq_enseignants_univ_matricule (university_id, matricule)`);
+        console.log('    ✅ Index unique composite (university_id, matricule) configuré pour enseignants');
+      }
+    } catch (errKey) {
+      console.warn('    ⚠️ Index enseignants matricule:', errKey.message);
+    }
+
+    // 8. Nettoyer les utilisateurs orphelins liés à des imports échoués
+    try {
+      const [cleanRes] = await conn.execute(`
+        DELETE FROM users 
+        WHERE email LIKE '%@import.excel' 
+          AND id NOT IN (SELECT user_id FROM enseignants WHERE user_id IS NOT NULL)
+      `);
+      if (cleanRes.affectedRows > 0) {
+        console.log(`    ✅ Nettoyage : ${cleanRes.affectedRows} utilisateurs orphelins d'importation supprimés.`);
+      }
+    } catch (cleanErr) {
+      console.warn('    ⚠️ Nettoyage des utilisateurs orphelins:', cleanErr.message);
+    }
+
     console.log('✅ Toutes les migrations sont à jour.');
   } catch (err) {
     console.error('❌ Erreur lors des migrations:', err.message);
