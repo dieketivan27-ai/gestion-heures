@@ -13,18 +13,20 @@ const APP_VERSION = Date.now().toString();
 
 // Security
 app.use(helmet());
-const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map(o => o.trim());
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:4200').split(',').map(o => o.trim());
 app.use(cors({
   origin: (origin, callback) => {
+    // Autoriser les requêtes sans origine (comme les outils REST ou curl)
     if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-University-Id'],
-  exposedHeaders: ['x-app-version']
+  exposedHeaders: ['x-app-version'],
+  credentials: true // Requis uniquement si vous utilisez des cookies/sessions cross-origin
 }));
 
 app.use((req, res, next) => {
@@ -73,7 +75,7 @@ app.use((err, req, res, next) => {
 
 // Run migrations then start the server
 runMigrations().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Serveur démarré sur le port ${PORT}`);
     console.log(`📡 Environnement: ${process.env.NODE_ENV}`);
   });
