@@ -24,7 +24,12 @@
             "tsConfig": "tsconfig.app.json",
             "assets": ["src/favicon.ico", "src/assets"],
             "styles": ["src/styles.scss"],
-            "scripts": []
+            "scripts": [],
+            "allowedCommonJsDependencies": [
+              "html2canvas",
+              "dompurify",
+              "jspdf"
+            ]
           },
           "configurations": {
             "production": {
