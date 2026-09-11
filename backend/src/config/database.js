@@ -15,6 +15,8 @@ const basePoolOptions = {
   queueLimit: 0,
   charset: 'utf8mb4',
   connectAttributes: { program_name: 'gestion_heures' },
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
 };
 
 let pool;
@@ -51,6 +53,16 @@ if (connectionUrl) {
 // Guarantee utf8mb4 is used for every connection pulled from the pool
 pool.on('connection', (connection) => {
   connection.query("SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'");
+});
+
+// Intercepte les erreurs fatales du pool mysql2 pour éviter le crash Node.js
+// (mysql2 émet 'error' avec fatal:true quand l'hôte est injoignable)
+pool.on('error', (err) => {
+  console.error('❌ Erreur pool MySQL:', err.message);
+  if (err.fatal) {
+    console.error('💀 Erreur fatale interceptée — vérifiez MYSQL_PUBLIC_URL sur Railway.');
+    // Ne pas re-throw : le serveur reste en ligne, les routes répondront avec 503
+  }
 });
 
 // Test de connectivité non bloquant avec retry (ne crashe pas le serveur)
