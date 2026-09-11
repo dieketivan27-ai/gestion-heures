@@ -1,7 +1,12 @@
 const mysql = require('mysql2/promise');
 
-// 1. Détection de l'URL de connexion (Railway fournit MYSQL_URL ou DATABASE_URL)
-const connectionUrl = process.env.MYSQL_URL || process.env.DATABASE_URL;
+// Ordre de priorité :
+// 1. MYSQL_PUBLIC_URL → URL publique Railway (TCP proxy, toujours accessible)
+// 2. MYSQL_URL / DATABASE_URL → URL interne Railway (.railway.internal, réseau privé)
+// 3. Variables individuelles MYSQLHOST / DB_HOST → fallback
+const connectionUrl = process.env.MYSQL_PUBLIC_URL
+  || process.env.MYSQL_URL
+  || process.env.DATABASE_URL;
 
 // Options communes du pool
 const basePoolOptions = {
@@ -48,13 +53,26 @@ pool.on('connection', (connection) => {
   connection.query("SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'");
 });
 
-pool.getConnection()
-  .then(conn => {
-    console.log('✅ Connexion MySQL établie avec succès');
-    conn.release();
-  })
-  .catch(err => {
-    console.error('❌ Erreur connexion MySQL:', err.message);
-  });
+// Test de connectivité non bloquant avec retry (ne crashe pas le serveur)
+(async () => {
+  let retries = 5;
+  while (retries > 0) {
+    try {
+      const conn = await pool.getConnection();
+      console.log('✅ Connexion MySQL établie avec succès');
+      conn.release();
+      return;
+    } catch (err) {
+      retries--;
+      console.error(`❌ Erreur connexion MySQL (${5 - retries}/5): ${err.message}`);
+      if (retries > 0) {
+        console.log('   ↻ Nouvelle tentative dans 3 secondes...');
+        await new Promise(r => setTimeout(r, 3000));
+      } else {
+        console.error('💀 Impossible de se connecter à MySQL après 5 tentatives. Le serveur continue mais les requêtes DB échoueront.');
+      }
+    }
+  }
+})();
 
 module.exports = pool;
