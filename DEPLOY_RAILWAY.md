@@ -28,15 +28,22 @@ Vous devez exécuter le script SQL généré localement dans `database/schema.sq
 
 ## 4. Variables d'Environnement (Backend)
 
-Allez dans le service Node.js > **Variables**, et ajoutez le contenu basé sur `backend/.env.example` :
+Allez dans le service Node.js > **Variables**, et ajoutez les variables suivantes :
 
-- `PORT` : `3000` (ou laissez vide, Railway injecte le sien)
+### Option A (La plus simple avec Railway - Référence de variable) :
+Ajoutez la variable suivante dans le service Backend :
+- `MYSQL_URL` : `${{MySQL.MYSQL_URL}}` (ou copiez la valeur de `MYSQL_URL` générée dans l'onglet **Variables** ou **Connect** du service MySQL)
+
+### Option B (Variables individuelles) :
+- `MYSQLHOST` : `${{MySQL.MYSQLHOST}}` (ou `DB_HOST`)
+- `MYSQLPORT` : `${{MySQL.MYSQLPORT}}` (ou `DB_PORT`)
+- `MYSQLUSER` : `${{MySQL.MYSQLUSER}}` (ou `DB_USER`)
+- `MYSQLPASSWORD` : `${{MySQL.MYSQLPASSWORD}}` (ou `DB_PASSWORD`)
+- `MYSQLDATABASE` : `${{MySQL.MYSQLDATABASE}}` (ou `DB_NAME`, par défaut souvent `railway` ou `gestion_heures`)
+
+### Autres variables requises :
+- `PORT` : `3000` (ou laissez vide, Railway injecte son propre port)
 - `NODE_ENV` : `production`
-- `DB_HOST` : (Valeur de MYSQLHOST dans le service MySQL)
-- `DB_PORT` : (Valeur de MYSQLPORT, ex: 3306)
-- `DB_USER` : (Valeur de MYSQLUSER)
-- `DB_PASSWORD` : (Valeur de MYSQLPASSWORD)
-- `DB_NAME` : (Valeur de MYSQLDATABASE)
 - `JWT_SECRET` : *Créez une chaîne complexe aléatoire*
 - `JWT_EXPIRES_IN` : `30m`
 - `FRONTEND_URL` : *URL de votre projet Vercel générée (ex: https://mon-app.vercel.app)*

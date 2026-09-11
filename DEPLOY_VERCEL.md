@@ -15,9 +15,9 @@ Le fichier de configuration SPA `vercel.json` a déjà été créé.
 
 ## Build Command et Output Directory
 
-Ces paramètres seront normalement détectés automatiquement :
-- **Build Command** : `ng build` ou `npm run build`
-- **Output Directory** : `dist/gestion-heures-frontend/browser`
+Ces paramètres seront normalement détectés automatiquement via `vercel.json` :
+- **Build Command** : `npm run build`
+- **Output Directory** : `dist/gestion-heures/browser`
 
 ## Variables d'Environnement
 
