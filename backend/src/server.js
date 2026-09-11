@@ -33,6 +33,9 @@ app.use(cors({
   credentials: true
 }));
 
+// Traitement explicite des requêtes preflight OPTIONS
+app.options('*', cors());
+
 app.use((req, res, next) => {
   res.setHeader('x-app-version', APP_VERSION);
   next();
