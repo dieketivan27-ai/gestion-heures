@@ -13,19 +13,20 @@ const APP_VERSION = Date.now().toString();
 
 // Security
 app.use(helmet());
-const allowedOrigins = process.env.FRONTEND_URL 
-  ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
-  : ['*'];
+
+const allowedOrigins = [
+  'https://gestion-heures-gold.vercel.app'
+];
 
 app.use(cors({
-  origin: (origin, callback) => {
-    // Autoriser les requêtes sans origine (curl, mobile) ou si '*' est configuré
-    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-      callback(null, origin || '*');
-    } else {
-      // Tolérer les requêtes Vercel et web par défaut en mode souple pour éviter les blocages CORS
-      callback(null, origin);
+  origin: function (origin, callback) {
+    if (!origin) {
+      return callback(null, true);
     }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-University-Id'],
@@ -60,12 +61,12 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(uploadsPath));
 
+// Health check
+app.get('/health', (req, res) => res.status(200).json({ success: true, message: 'API is running', timestamp: new Date() }));
+app.get('/api/health', (req, res) => res.status(200).json({ success: true, message: 'API is running', timestamp: new Date() }));
+
 // Routes
 app.use('/api', require('./routes/index'));
-
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
-app.get('/api/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
 
 // 404
 app.use((req, res) => res.status(404).json({ message: 'Route introuvable' }));

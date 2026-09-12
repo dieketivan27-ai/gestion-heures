@@ -1,12 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="4af907d9-c3a5-4d26-8682-2b401952ed2e" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/backend/src/controllers/dashboardController.js" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/controllers/dashboardController.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/src/routes/index.js" beforeDir="false" afterPath="$PROJECT_DIR$/backend/src/routes/index.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/app/core/services/api.service.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/app/core/services/api.service.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/app/features/rapports/rapports.component.ts" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/app/features/rapports/rapports.component.ts" afterDir="false" />
-    </list>
+    <list default="true" id="4af907d9-c3a5-4d26-8682-2b401952ed2e" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -45,12 +40,21 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
     "git-widget-placeholder": "main",
+    "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "C:/Users/Ivan/OneDrive/Documents/COURS LICENCE 3/1ER SEMESTRE_UE/DEVELOPPEMENT WEB DYNAMIQUE/gestion-heures",
+    "last_opened_file_path": "D:/DOSSIER IVAN/gestion-heures",
     "nodejs_package_manager_path": "npm",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-34e2839f716b-intellij.indexing.shared.core-IU-262.9437.185" />
+        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-IU-262.9437.185" />
+      </set>
+    </attachedChunks>
+  </component>
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">
       <changelist id="4af907d9-c3a5-4d26-8682-2b401952ed2e" name="Changes" comment="" />
