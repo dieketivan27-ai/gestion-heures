@@ -18,7 +18,7 @@ const allowedOrigins = [
   'https://gestion-heures-gold.vercel.app'
 ];
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) {
       return callback(null, true);
@@ -32,10 +32,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-University-Id'],
   exposedHeaders: ['x-app-version'],
   credentials: true
-}));
+};
 
-// Traitement explicite des requêtes preflight OPTIONS
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Traitement explicite des requêtes preflight OPTIONS avec les mêmes options
+app.options('*', cors(corsOptions));
 
 app.use((req, res, next) => {
   res.setHeader('x-app-version', APP_VERSION);
