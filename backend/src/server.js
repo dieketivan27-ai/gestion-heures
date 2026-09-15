@@ -28,12 +28,15 @@ const allowedOrigins = [
 const corsOptions = {
   origin: function (origin, callback) {
     // Autoriser les requêtes sans origine (ex: Postman, Railway health checks)
-    if (!origin) {
-      return callback(null, true);
-    }
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
+    if (!origin) return callback(null, true);
+
+    // URL de production explicitement autorisée
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+
+    // URLs de preview Vercel (ex: gestion-heures-xyz123-dieketivan27-2610s-projects.vercel.app)
+    const isVercelPreview = /^https:\/\/gestion-heures-[\w-]+\.vercel\.app$/.test(origin);
+    if (isVercelPreview) return callback(null, true);
+
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -59,6 +62,10 @@ app.use((req, res, next) => {
   res.setHeader('x-app-version', APP_VERSION);
   next();
 });
+
+// Railway est derrière un reverse proxy — nécessaire pour que express-rate-limit
+// identifie correctement les IPs et évite ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
 
 // Rate limiting
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 500 });
