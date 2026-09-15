@@ -33,8 +33,9 @@ const corsOptions = {
     // URL de production explicitement autorisée
     if (allowedOrigins.includes(origin)) return callback(null, true);
 
-    // URLs de preview Vercel (ex: gestion-heures-xyz123-dieketivan27-2610s-projects.vercel.app)
-    const isVercelPreview = /^https:\/\/gestion-heures-[\w-]+\.vercel\.app$/.test(origin);
+    // URLs de preview Vercel — uniquement le projet dieketivan27-2610s-projects
+    // ex: gestion-heures-bpid693du-dieketivan27-2610s-projects.vercel.app
+    const isVercelPreview = /^https:\/\/gestion-heures-[\w-]+-dieketivan27-2610s-projects\.vercel\.app$/.test(origin);
     if (isVercelPreview) return callback(null, true);
 
     return callback(new Error('Not allowed by CORS'));
