@@ -11,15 +11,13 @@ const PORT = process.env.PORT || 3000;
 
 const APP_VERSION = Date.now().toString();
 
-// Security
-app.use(helmet());
-
 const allowedOrigins = [
   'https://gestion-heures-gold.vercel.app'
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
+    // Autoriser les requêtes sans origine (ex: Postman, Railway health checks)
     if (!origin) {
       return callback(null, true);
     }
@@ -31,13 +29,30 @@ const corsOptions = {
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-University-Id'],
   exposedHeaders: ['x-app-version'],
-  credentials: true
+  credentials: true,
+  optionsSuccessStatus: 204
 };
 
+// ✅ CORS doit être appliqué AVANT helmet pour éviter les conflits de headers
 app.use(cors(corsOptions));
 
-// Traitement explicite des requêtes preflight OPTIONS avec les mêmes options
-app.options('*', cors(corsOptions));
+// Gérer explicitement les requêtes preflight OPTIONS AVANT tout autre middleware
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-University-Id');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+  return res.sendStatus(204);
+});
+
+// Security (après CORS pour ne pas écraser les headers CORS)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
 
 app.use((req, res, next) => {
   res.setHeader('x-app-version', APP_VERSION);
