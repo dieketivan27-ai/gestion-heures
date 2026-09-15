@@ -65,9 +65,9 @@ pool.on('error', (err) => {
   }
 });
 
-// Test de connectivité non bloquant avec retry (ne crashe pas le serveur)
+// Test de connectivité non bloquant avec retry (ne crashe JAMAIS le serveur)
 (async () => {
-  let retries = 5;
+  let retries = 3;
   while (retries > 0) {
     try {
       const conn = await pool.getConnection();
@@ -76,15 +76,18 @@ pool.on('error', (err) => {
       return;
     } catch (err) {
       retries--;
-      console.error(`❌ Erreur connexion MySQL (${5 - retries}/5): ${err.message}`);
+      console.error(`❌ Erreur connexion MySQL (${3 - retries}/3): ${err.message}`);
       if (retries > 0) {
-        console.log('   ↻ Nouvelle tentative dans 3 secondes...');
-        await new Promise(r => setTimeout(r, 3000));
+        console.log('   ↻ Nouvelle tentative dans 5 secondes...');
+        await new Promise(r => setTimeout(r, 5000));
       } else {
-        console.error('💀 Impossible de se connecter à MySQL après 5 tentatives. Le serveur continue mais les requêtes DB échoueront.');
+        console.error('⚠️  MySQL inaccessible au démarrage — le serveur continue (HTTP OK, DB KO).');
       }
     }
   }
-})();
+})().catch(err => {
+  // Sécurité absolue : capturer toute erreur non prévue pour ne JAMAIS crasher le process
+  console.error('⚠️  Erreur inattendue lors du test de connexion MySQL:', err.message);
+});
 
 module.exports = pool;

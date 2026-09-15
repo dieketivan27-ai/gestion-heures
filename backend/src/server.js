@@ -6,13 +6,23 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { runMigrations } = require('./config/migrate');
 
+// ✅ Protection globale : empêche tout crash inattendu de tuer le process Railway
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️  unhandledRejection (non fatal):', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('⚠️  uncaughtException (non fatal):', err.message);
+});
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const APP_VERSION = Date.now().toString();
 
+// Origines autorisées (ajouter d'autres URLs via la variable FRONTEND_URL sur Railway)
 const allowedOrigins = [
-  'https://gestion-heures-gold.vercel.app'
+  'https://gestion-heures-gold.vercel.app',
+  ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
 ];
 
 const corsOptions = {
@@ -33,21 +43,12 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
-// ✅ CORS doit être appliqué AVANT helmet pour éviter les conflits de headers
+// ✅ CORS appliqué en PREMIER pour tous les types de requêtes
 app.use(cors(corsOptions));
 
-// Gérer explicitement les requêtes preflight OPTIONS AVANT tout autre middleware
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-University-Id');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Max-Age', '86400');
-  }
-  return res.sendStatus(204);
-});
+// Preflight OPTIONS : réponse 204 rapide avec tous les headers CORS nécessaires
+// (double protection : cors() + handler manuel)
+app.options('*', cors(corsOptions), (req, res) => res.sendStatus(204));
 
 // Security (après CORS pour ne pas écraser les headers CORS)
 app.use(helmet({
