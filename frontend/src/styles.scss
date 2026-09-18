@@ -62,7 +62,7 @@
 html, body { height: 100%; font-family: 'Inter', sans-serif; }
 
 /* ---- LAYOUT (structural — not replaceable by Tailwind alone) ---- */
-.layout { display: flex; height: 100vh; overflow: hidden; }
+.layout { display: flex; height: 100dvh; overflow: hidden; }
 .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 .page-content { flex: 1; overflow-y: auto; padding: 20px 24px; }
 
@@ -302,9 +302,10 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; }
   :root { --sidebar-w: 0px; }
   .sidebar {
     position: fixed;
-    height: 100vh;
+    height: 100dvh;
     z-index: 1100;
     width: 260px;
+    max-width: 85vw;
     transform: translateX(-100%);
     box-shadow: 10px 0 30px rgba(0,0,0,0.2);
   }
@@ -344,7 +345,7 @@ html, body { height: 100%; font-family: 'Inter', sans-serif; }
 
 /* ---- LOGIN PAGE gradient ---- */
 .login-page {
-  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
   background: linear-gradient(135deg, #0f172a 0%, #1a3a8f 50%, #1e293b 100%);
 }
 

@@ -26,22 +26,22 @@ import { HeureEffectuee, Enseignant, Matiere, AnneeAcademique } from '../../core
     <!-- FILTRES -->
     <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-4 mb-4">
       <div class="flex gap-3 flex-wrap">
-        <select class="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" style="width:200px" [(ngModel)]="filterAnnee" (change)="load()">
+        <select class="w-full sm:w-auto min-w-[200px] px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" [(ngModel)]="filterAnnee" (change)="load()">
           <option value="ALL">Toutes les années</option>
           <option *ngFor="let a of annees" [value]="a.id">{{a.libelle}}</option>
         </select>
-        <select class="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" style="width:160px" [(ngModel)]="filterType" (change)="load()">
+        <select class="w-full sm:w-auto min-w-[160px] px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" [(ngModel)]="filterType" (change)="load()">
           <option value="">Tous types</option>
           <option value="CM">CM</option>
           <option value="TD">TD</option>
           <option value="TP">TP</option>
         </select>
-        <select class="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" style="width:160px" [(ngModel)]="filterValide" (change)="load()">
+        <select class="w-full sm:w-auto min-w-[160px] px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" [(ngModel)]="filterValide" (change)="load()">
           <option value="">Tous statuts</option>
           <option value="true">Validés</option>
           <option value="false">En attente</option>
         </select>
-        <select *ngIf="isRH" class="px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" style="width:180px" [(ngModel)]="filterEnseignant" (change)="load()">
+        <select *ngIf="isRH" class="w-full sm:w-auto min-w-[180px] px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" [(ngModel)]="filterEnseignant" (change)="load()">
           <option value="">Tous enseignants</option>
           <option *ngFor="let e of enseignants" [value]="e.id">{{e.nom}} {{e.prenom}}</option>
         </select>

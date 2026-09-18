@@ -37,6 +37,8 @@ Chart.register(...registerables);
       align-items: center;
       padding: 20px;
       gap: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
     }
     .donut-legend {
       display: flex;
