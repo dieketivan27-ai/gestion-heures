@@ -112,7 +112,7 @@ Chart.register(...registerables);
     <div *ngIf="data && !loading && !isTeacher">
 
       <!-- STAT CARDS -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
         <div class="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex items-center justify-between">
           <div class="flex items-center gap-3">
             <div class="flex -space-x-2.5 overflow-hidden" *ngIf="data.teacherAvatars?.length">
