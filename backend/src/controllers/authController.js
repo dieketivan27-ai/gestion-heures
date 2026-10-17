@@ -64,7 +64,7 @@ exports.login = async (req, res) => {
     console.error('[LOGIN] Erreur interne:', err.message, err.stack);
     res.status(500).json({
       message: 'Une erreur interne est survenue. Veuillez réessayer.',
-      ...(process.env.NODE_ENV !== 'production' && { debug: err.message })
+      debug: err.message   // ⚠️ TEMPORAIRE — retirer après diagnostic
     });
   }
 };
