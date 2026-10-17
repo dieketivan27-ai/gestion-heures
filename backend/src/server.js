@@ -1,4 +1,15 @@
 require('dotenv').config();
+
+// ─── Vérification des variables critiques au démarrage ───────────────────────
+if (!process.env.JWT_SECRET) {
+  console.error('❌ FATAL: JWT_SECRET est absent. Définissez-le dans les variables Render.');
+  process.exit(1);
+}
+if (!process.env.DATABASE_URL) {
+  console.warn('⚠️  DATABASE_URL absent — le serveur démarrera sans base de données.');
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

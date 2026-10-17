@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const bcrypt = require('bcrypt');
 
 /**
  * Exécute les migrations nécessaires au démarrage du serveur.
@@ -9,6 +10,263 @@ async function runMigrations() {
   const conn = await db.getConnection();
   try {
     console.log('🔄 Vérification des migrations...');
+
+    // ──────────────────────────────────────────────────────────────
+    // Migration 0 : Schéma initial — crée toutes les tables si absentes
+    // Idempotent grâce à CREATE TABLE IF NOT EXISTS
+    // Nécessaire sur Neon vide (première connexion)
+    // ──────────────────────────────────────────────────────────────
+    console.log('  🔄 Migration 0: Schéma initial...');
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS universities (
+        id         SERIAL PRIMARY KEY,
+        nom        VARCHAR(150) NOT NULL UNIQUE,
+        sigle      VARCHAR(20) UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id                   SERIAL PRIMARY KEY,
+        email                VARCHAR(255) NOT NULL UNIQUE,
+        password             VARCHAR(255) NOT NULL,
+        role                 VARCHAR(20) NOT NULL DEFAULT 'enseignant'
+                               CHECK (role IN ('super_admin','admin','rh','enseignant')),
+        nom                  VARCHAR(100),
+        prenom               VARCHAR(100),
+        telephone            VARCHAR(20),
+        avatar_url           VARCHAR(255),
+        is_active            BOOLEAN DEFAULT TRUE,
+        must_change_password BOOLEAN DEFAULT FALSE,
+        reset_token          VARCHAR(255),
+        reset_token_expiry   TIMESTAMP,
+        university_id        INTEGER REFERENCES universities(id) ON DELETE SET NULL,
+        created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS annees_academiques (
+        id            SERIAL PRIMARY KEY,
+        libelle       VARCHAR(50) NOT NULL,
+        date_debut    DATE NOT NULL,
+        date_fin      DATE NOT NULL,
+        is_active     BOOLEAN DEFAULT FALSE,
+        university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS departements (
+        id            SERIAL PRIMARY KEY,
+        nom           VARCHAR(100) NOT NULL,
+        code          VARCHAR(20) NOT NULL,
+        university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (code, university_id)
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS enseignants (
+        id                    SERIAL PRIMARY KEY,
+        user_id               INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        matricule             VARCHAR(50),
+        nom                   VARCHAR(100) NOT NULL,
+        prenom                VARCHAR(100) NOT NULL,
+        email                 VARCHAR(255) NOT NULL UNIQUE,
+        telephone             VARCHAR(20),
+        grade                 VARCHAR(30) NOT NULL
+                                CHECK (grade IN ('Assistant','Maitre-Assistant','Professeur','Autres')),
+        statut                VARCHAR(20) NOT NULL
+                                CHECK (statut IN ('Permanent','Vacataire')),
+        departement_id        INTEGER REFERENCES departements(id) ON DELETE SET NULL,
+        taux_horaire_cm       DECIMAL(10,2) DEFAULT 0,
+        taux_horaire_td       DECIMAL(10,2) DEFAULT 0,
+        taux_horaire_tp       DECIMAL(10,2) DEFAULT 0,
+        heures_contractuelles INTEGER DEFAULT 192,
+        university_id         INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (matricule, university_id)
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS filieres (
+        id             SERIAL PRIMARY KEY,
+        nom            VARCHAR(100) NOT NULL,
+        code           VARCHAR(20) NOT NULL,
+        departement_id INTEGER REFERENCES departements(id) ON DELETE SET NULL,
+        university_id  INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (code, university_id)
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS matieres (
+        id                       SERIAL PRIMARY KEY,
+        intitule                 VARCHAR(200) NOT NULL,
+        code                     VARCHAR(50),
+        filiere_id               INTEGER REFERENCES filieres(id) ON DELETE SET NULL,
+        niveau                   VARCHAR(5) NOT NULL CHECK (niveau IN ('L1','L2','L3','M1','M2')),
+        semestre                 VARCHAR(3) DEFAULT 'S1' CHECK (semestre IN ('S1','S2','S3','S4')),
+        volume_horaire_prevu_cm  INTEGER DEFAULT 0,
+        volume_horaire_prevu_td  INTEGER DEFAULT 0,
+        volume_horaire_prevu_tp  INTEGER DEFAULT 0,
+        annee_academique_id      INTEGER REFERENCES annees_academiques(id) ON DELETE SET NULL,
+        university_id            INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS parametres (
+        id            SERIAL PRIMARY KEY,
+        cle           VARCHAR(100) NOT NULL,
+        valeur        VARCHAR(255) NOT NULL,
+        description   VARCHAR(255),
+        university_id INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (cle, university_id)
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS heures_effectuees (
+        id                  SERIAL PRIMARY KEY,
+        enseignant_id       INTEGER NOT NULL REFERENCES enseignants(id) ON DELETE CASCADE,
+        matiere_id          INTEGER REFERENCES matieres(id) ON DELETE SET NULL,
+        annee_academique_id INTEGER NOT NULL REFERENCES annees_academiques(id) ON DELETE CASCADE,
+        date_cours          DATE NOT NULL,
+        type_heure          VARCHAR(3) NOT NULL CHECK (type_heure IN ('CM','TD','TP')),
+        duree               DECIMAL(10,2) NOT NULL,
+        duree_equivalente   DECIMAL(10,2),
+        salle               VARCHAR(50),
+        observations        TEXT,
+        is_complementaire   BOOLEAN DEFAULT FALSE,
+        valide              BOOLEAN DEFAULT FALSE,
+        valide_par          INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        valide_le           TIMESTAMP,
+        university_id       INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS attributions_matieres (
+        id                  SERIAL PRIMARY KEY,
+        enseignant_id       INTEGER NOT NULL REFERENCES enseignants(id) ON DELETE CASCADE,
+        matiere_id          INTEGER NOT NULL REFERENCES matieres(id) ON DELETE CASCADE,
+        annee_academique_id INTEGER NOT NULL REFERENCES annees_academiques(id) ON DELETE CASCADE,
+        semestre            VARCHAR(3) NOT NULL DEFAULT 'S1' CHECK (semestre IN ('S1','S2','S3','S4')),
+        heures_total        DECIMAL(10,2) DEFAULT 0,
+        statut              VARCHAR(20) DEFAULT 'EN_ATTENTE'
+                              CHECK (statut IN ('EN_ATTENTE','ACCEPTEE','REFUSEE')),
+        observation         TEXT,
+        university_id       INTEGER REFERENCES universities(id) ON DELETE CASCADE,
+        date_attribution    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        date_reponse        TIMESTAMP,
+        UNIQUE (enseignant_id, matiere_id, annee_academique_id)
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS enseignants_matieres (
+        enseignant_id INTEGER NOT NULL REFERENCES enseignants(id) ON DELETE CASCADE,
+        matiere_id    INTEGER NOT NULL REFERENCES matieres(id) ON DELETE CASCADE,
+        PRIMARY KEY (enseignant_id, matiere_id)
+      )
+    `);
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id                SERIAL PRIMARY KEY,
+        user_id           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action            VARCHAR(100) NOT NULL,
+        table_concernee   VARCHAR(100),
+        enregistrement_id INTEGER,
+        details           TEXT,
+        ip_address        VARCHAR(45),
+        university_id     INTEGER REFERENCES universities(id) ON DELETE SET NULL,
+        created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Triggers updated_at
+    await conn.execute(`
+      CREATE OR REPLACE FUNCTION set_updated_at()
+      RETURNS TRIGGER AS $$
+      BEGIN NEW.updated_at = CURRENT_TIMESTAMP; RETURN NEW; END;
+      $$ LANGUAGE plpgsql
+    `);
+    for (const tbl of ['users','enseignants','heures_effectuees','parametres']) {
+      await conn.execute(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = '${tbl}_updated_at') THEN
+            CREATE TRIGGER ${tbl}_updated_at
+              BEFORE UPDATE ON ${tbl}
+              FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+          END IF;
+        END$$
+      `);
+    }
+
+    // ── Données de base (seed) ──
+    await conn.execute(`
+      INSERT INTO universities (id, nom, sigle) VALUES (1, 'Université de Démonstration', 'UDEMO')
+      ON CONFLICT DO NOTHING
+    `);
+    await conn.execute(`SELECT setval('universities_id_seq', GREATEST((SELECT COALESCE(MAX(id),1) FROM universities), 1))`);
+
+    await conn.execute(`
+      INSERT INTO parametres (cle, valeur, description, university_id) VALUES
+      ('equivalence_cm_td', '1.5', '1h CM = X heures TD équivalent', 1),
+      ('equivalence_cm_tp', '2', '1h CM = X heures TP équivalent', 1),
+      ('seuil_heures_complementaires_permanent', '192', 'Seuil heures complémentaires pour permanents', 1),
+      ('seuil_heures_complementaires_vacataire', '0', 'Seuil heures complémentaires pour vacataires', 1)
+      ON CONFLICT (cle, university_id) DO NOTHING
+    `);
+
+    await conn.execute(`
+      INSERT INTO annees_academiques (id, libelle, date_debut, date_fin, is_active, university_id)
+      VALUES (1, '2024-2025', '2024-09-01', '2025-07-31', TRUE, 1)
+      ON CONFLICT DO NOTHING
+    `);
+    await conn.execute(`SELECT setval('annees_academiques_id_seq', GREATEST((SELECT COALESCE(MAX(id),1) FROM annees_academiques), 1))`);
+
+    // ── Compte Super Admin ──
+    // Le mot de passe vient de SEED_ADMIN_PASSWORD (env var).
+    // Si absent, on utilise le hash statique de 'Admin@1234' comme fallback.
+    const staticHash = '$2b$10$cjcmdc.amM.tPZ3MgVZt7O19HcmCOw6r/T8ZbeQc914TenbJk5S82';
+    let superAdminHash = staticHash;
+    if (process.env.SEED_ADMIN_PASSWORD) {
+      superAdminHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD, 10);
+    }
+    await conn.execute(`
+      INSERT INTO users (email, password, role, nom, prenom, is_active, must_change_password)
+      VALUES ('superadmin@gestion.univ', $1, 'super_admin', 'SYSTEM', 'SuperAdmin', TRUE, FALSE)
+      ON CONFLICT (email) DO NOTHING
+    `, [superAdminHash]);
+
+    let adminHash = staticHash;
+    if (process.env.SEED_ADMIN_PASSWORD) {
+      adminHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD, 10);
+    }
+    await conn.execute(`
+      INSERT INTO users (email, password, role, is_active, must_change_password, university_id)
+      VALUES ('admin@univ.ci', $1, 'admin', TRUE, FALSE, 1)
+      ON CONFLICT (email) DO NOTHING
+    `, [adminHash]);
+
+    console.log('  ✅ Migration 0: Schéma initial et seed OK');
 
     // ──────────────────────────────────────────────────────────────
     // Migration 1: Colonne semestre dans la table matieres

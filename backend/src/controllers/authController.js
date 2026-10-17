@@ -61,8 +61,11 @@ exports.login = async (req, res) => {
       }
     });
   } catch (err) {
-    console.error('Login error:', err);
-    res.status(500).json({ message: 'Erreur serveur', error: err.message });
+    console.error('[LOGIN] Erreur interne:', err.message, err.stack);
+    res.status(500).json({
+      message: 'Une erreur interne est survenue. Veuillez réessayer.',
+      ...(process.env.NODE_ENV !== 'production' && { debug: err.message })
+    });
   }
 };
 
