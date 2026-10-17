@@ -17,7 +17,7 @@ exports.getDashboard = async (req, res) => {
     
     // Build queryParams for each query correctly!
     let qParamsTotalHeures = [];
-    let qHeuresWhere = ' WHERE valide = 1 ';
+    let qHeuresWhere = ' WHERE valide = TRUE ';
     if (anneeId && anneeId !== 'ALL') {
       qHeuresWhere += ' AND h.annee_academique_id=? ';
       qParamsTotalHeures.push(anneeId);
@@ -45,7 +45,7 @@ exports.getDashboard = async (req, res) => {
     // 2. Total heures
     const [totalHeures] = await db.execute(
       `SELECT COALESCE(SUM(duree),0) as total, 
-              COALESCE(SUM(CASE WHEN is_complementaire=1 THEN duree ELSE 0 END),0) as complementaires
+              COALESCE(SUM(CASE WHEN is_complementaire=TRUE THEN duree ELSE 0 END),0) as complementaires
        FROM heures_effectuees h ${qHeuresWhere}`, qParamsTotalHeures
     );
 
@@ -75,7 +75,7 @@ exports.getDashboard = async (req, res) => {
               COUNT(DISTINCT e.id) as nb_enseignants
        FROM departements d
        LEFT JOIN enseignants e ON e.departement_id = d.id
-       LEFT JOIN heures_effectuees h ON h.enseignant_id = e.id ${joinAnnee} AND h.valide=1
+       LEFT JOIN heures_effectuees h ON h.enseignant_id = e.id ${joinAnnee} AND h.valide=TRUE
        ${qDeptWhere}
        GROUP BY d.id ORDER BY total_heures DESC`, qParamsParDept
     );
@@ -101,19 +101,19 @@ exports.getDashboard = async (req, res) => {
               COALESCE(SUM(h.duree_equivalente),0) - e.heures_contractuelles as depassement
        FROM enseignants e
        LEFT JOIN users u ON e.user_id = u.id
-       LEFT JOIN heures_effectuees h ON h.enseignant_id=e.id ${joinAnneeDep} AND h.valide=1
+       LEFT JOIN heures_effectuees h ON h.enseignant_id=e.id ${joinAnneeDep} AND h.valide=TRUE
        ${qDepassementWhere}
-       GROUP BY e.id HAVING total_effectuees > e.heures_contractuelles
+       GROUP BY e.id HAVING COALESCE(SUM(h.duree_equivalente),0) > e.heures_contractuelles
        ORDER BY depassement DESC`, qParamsDepassement
     );
 
     // 6. Mensuel
     const [mensuel] = await db.execute(
-      `SELECT DATE_FORMAT(date_cours,'%Y-%m') as mois,
+      `SELECT TO_CHAR(date_cours,'YYYY-MM') as mois,
               COALESCE(SUM(duree),0) as total_heures,
               COUNT(*) as nb_seances
        FROM heures_effectuees h ${qHeuresWhere}
-       GROUP BY mois ORDER BY mois`, qParamsTotalHeures
+       GROUP BY TO_CHAR(date_cours,'YYYY-MM') ORDER BY mois`, qParamsTotalHeures
     );
 
     // 7. Top enseignants
@@ -135,9 +135,9 @@ exports.getDashboard = async (req, res) => {
       `SELECT e.nom, e.prenom, e.grade, u.avatar_url, COALESCE(SUM(h.duree),0) as total
        FROM enseignants e
        LEFT JOIN users u ON e.user_id = u.id
-       LEFT JOIN heures_effectuees h ON h.enseignant_id=e.id ${joinAnneeTop} AND h.valide=1
+       LEFT JOIN heures_effectuees h ON h.enseignant_id=e.id ${joinAnneeTop} AND h.valide=TRUE
        ${qTopWhere}
-       GROUP BY e.id ORDER BY total DESC LIMIT 5`, qParamsTop
+       GROUP BY e.id, e.nom, e.prenom, e.grade, u.avatar_url ORDER BY total DESC LIMIT 5`, qParamsTop
     );
 
     // 8. Avatars
@@ -177,7 +177,7 @@ exports.getEtatPaiement = async (req, res) => {
   const university_id = req.user.university_id || (req.user.role === 'super_admin' ? req.query.university_id : null);
   try {
     let anneeId = annee_id;
-    let whereHeures = ' WHERE h.valide = 1 ';
+    let whereHeures = ' WHERE h.valide = TRUE ';
     const paramsHeures = [];
     
     if (anneeId && anneeId !== 'ALL') {
@@ -186,7 +186,7 @@ exports.getEtatPaiement = async (req, res) => {
     }
     
     if (mois && mois !== 'ALL') {
-      whereHeures += ' AND MONTH(h.date_cours) = ? ';
+      whereHeures += ' AND EXTRACT(MONTH FROM h.date_cours) = ? ';
       paramsHeures.push(mois);
     }
 
@@ -398,8 +398,8 @@ exports.importExcel = async (req, res) => {
           if (depts.length) {
             deptId = depts[0].id;
           } else {
-            const [newDept] = await conn.execute('INSERT INTO departements (nom, code, university_id) VALUES (?, ?, ?)', [deptName, deptName.substring(0, 5).toUpperCase(), university_id]);
-            deptId = newDept.insertId;
+            const [newDept] = await conn.execute('INSERT INTO departements (nom, code, university_id) VALUES (?, ?, ?) RETURNING id', [deptName, deptName.substring(0, 5).toUpperCase(), university_id]);
+            deptId = newDept[0]?.id;
           }
         }
 
@@ -418,17 +418,17 @@ exports.importExcel = async (req, res) => {
           const hash = await bcrypt.hash(tempPassword, 10);
           
           const [userRes] = await conn.execute(
-            'INSERT INTO users (email, password, role, must_change_password, university_id) VALUES (?,?,?,TRUE,?)',
+            'INSERT INTO users (email, password, role, must_change_password, university_id) VALUES (?,?,?,TRUE,?) RETURNING id',
             [tempEmail, hash, 'enseignant', university_id]
           );
-          const user_id = userRes.insertId;
+          const user_id = userRes[0]?.id;
 
           const [newEns] = await conn.execute(
             `INSERT INTO enseignants (user_id, matricule, nom, prenom, email, grade, statut, departement_id, heures_contractuelles, university_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`,
+             VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id`,
             [user_id, matricule, nom, '', tempEmail, grade, statut, deptId, statut === 'Vacataire' ? 0 : 192, university_id]
           );
-          enseignantId = newEns.insertId;
+          enseignantId = newEns[0]?.id;
         }
 
         await conn.execute(
@@ -450,7 +450,7 @@ exports.importExcel = async (req, res) => {
 
             await conn.execute(
               `INSERT INTO heures_effectuees (enseignant_id, annee_academique_id, date_cours, type_heure, duree, duree_equivalente, valide, observations, university_id)
-               VALUES (?, ?, CURDATE(), ?, ?, ?, TRUE, "IMPORT_EXCEL", ?)`,
+               VALUES (?, ?, CURRENT_DATE, ?, ?, ?, TRUE, 'IMPORT_EXCEL', ?)`,
               [enseignantId, anneeId, s.type, s.duree, dureeEquiv, university_id]
             );
           }
@@ -515,8 +515,8 @@ exports.importJson = async (req, res) => {
           const [depts] = await conn.execute('SELECT id FROM departements WHERE (nom = ? OR code = ?) AND university_id = ?', [departement, departement, university_id]);
           if (depts.length) deptId = depts[0].id;
           else {
-            const [newDept] = await conn.execute('INSERT INTO departements (nom, code, university_id) VALUES (?, ?, ?)', [departement, departement.substring(0, 5).toUpperCase(), university_id]);
-            deptId = newDept.insertId;
+            const [newDept] = await conn.execute('INSERT INTO departements (nom, code, university_id) VALUES (?, ?, ?) RETURNING id', [departement, departement.substring(0, 5).toUpperCase(), university_id]);
+            deptId = newDept[0]?.id;
           }
         }
 
@@ -533,13 +533,13 @@ exports.importJson = async (req, res) => {
           const tempEmail = `${matricule.toLowerCase()}.u${university_id}@import.excel`;
           const tempPassword = 'Temp' + Math.floor(1000 + Math.random() * 9000);
           const hash = await bcrypt.hash(tempPassword, 10);
-          const [userRes] = await conn.execute('INSERT INTO users (email, password, role, must_change_password, university_id) VALUES (?,?,?,TRUE,?)', [tempEmail, hash, 'enseignant', university_id]);
+          const [userRes] = await conn.execute('INSERT INTO users (email, password, role, must_change_password, university_id) VALUES (?,?,?,TRUE,?) RETURNING id', [tempEmail, hash, 'enseignant', university_id]);
           const [newEns] = await conn.execute(
             `INSERT INTO enseignants (user_id, matricule, nom, prenom, email, grade, statut, departement_id, heures_contractuelles, university_id)
-             VALUES (?,?,?,?,?,?,?,?,?,?)`,
-            [userRes.insertId, matricule, nom, '', tempEmail, grade, statut, deptId, statut === 'Vacataire' ? 0 : 192, university_id]
+             VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id`,
+            [userRes[0]?.id, matricule, nom, '', tempEmail, grade, statut, deptId, statut === 'Vacataire' ? 0 : 192, university_id]
           );
-          enseignantId = newEns.insertId;
+          enseignantId = newEns[0]?.id;
         }
 
         await conn.execute('DELETE FROM heures_effectuees WHERE enseignant_id = ? AND annee_academique_id = ? AND observations = "IMPORT_EXCEL"', [enseignantId, anneeId]);
@@ -551,7 +551,7 @@ exports.importJson = async (req, res) => {
             if (s.t === 'TD') eq = s.d / coefCM_TD; else if (s.t === 'TP') eq = s.d / coefCM_TP;
             await conn.execute(
               `INSERT INTO heures_effectuees (enseignant_id, annee_academique_id, date_cours, type_heure, duree, duree_equivalente, valide, observations, university_id)
-               VALUES (?, ?, CURDATE(), ?, ?, ?, TRUE, "IMPORT_EXCEL", ?)`,
+               VALUES (?, ?, CURRENT_DATE, ?, ?, ?, TRUE, 'IMPORT_EXCEL', ?)`,
               [enseignantId, anneeId, s.t, s.d, eq, university_id]
             );
           }

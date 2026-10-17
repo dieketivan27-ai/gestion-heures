@@ -1,33 +1,29 @@
-version: '3.9'
-
 services:
 
   # ============================================================
-  # MySQL Database
+  # PostgreSQL 16 Database
   # ============================================================
-  mysql:
-    image: mysql:8.0
-    container_name: gestion_heures_mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: gestion_heures_postgres
     restart: unless-stopped
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
     environment:
-      MYSQL_ROOT_PASSWORD: RootPass2024!
-      MYSQL_DATABASE: gestion_heures
-      MYSQL_USER: gestion_user
-      MYSQL_PASSWORD: GestionHeures2024!
+      POSTGRES_DB: gestion_heures
+      POSTGRES_USER: gestion_user
+      POSTGRES_PASSWORD: GestionHeures2024!
     ports:
-      - "3306:3306"   # Accessible depuis MySQL Workbench
+      - "5432:5432"   # Accessible depuis DBeaver / pgAdmin
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "gestion_user", "-pGestionHeures2024!"]
+      test: ["CMD-SHELL", "pg_isready -U gestion_user -d gestion_heures"]
       interval: 10s
       timeout: 5s
       retries: 15
-      start_period: 60s
+      start_period: 30s
 
   # ============================================================
   # Node.js Backend API
@@ -38,29 +34,31 @@ services:
       dockerfile: Dockerfile
     container_name: gestion_heures_backend
     restart: unless-stopped
-    env_file:
-      - ./backend/.env
     environment:
       PORT: 3000
       NODE_ENV: production
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_USER: gestion_user
-      DB_PASSWORD: GestionHeures2024!
-      DB_NAME: gestion_heures
-      JWT_SECRET: S3cr3tK3y_G3stion_H3ur3s_2024_Sup3r_S3cur3!
-      JWT_EXPIRES_IN: 30m
-      CORS_ORIGIN: http://localhost
+      DATABASE_URL: postgresql://gestion_user:GestionHeures2024!@postgres:5432/gestion_heures
+      JWT_SECRET: ${JWT_SECRET:-S3cr3tK3y_G3stion_H3ur3s_2024_Sup3r_S3cur3!}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-30m}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      APP_URL: ${APP_URL:-http://localhost}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-465}
+      MAIL_SECURE: ${MAIL_SECURE:-true}
+      MAIL_USER: ${MAIL_USER:-}
+      MAIL_PASS: ${MAIL_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-GestionHeures <no-reply@gestionheures.com>}
     ports:
       - "8081:3000"
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
+      start_period: 30s
     volumes:
       - uploads_data:/app/src/uploads
     networks:
@@ -87,7 +85,7 @@ networks:
     driver: bridge
 
 volumes:
-  mysql_data:
+  postgres_data:
     driver: local
   uploads_data:
     driver: local

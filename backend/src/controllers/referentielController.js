@@ -21,8 +21,8 @@ exports.createDepartement = async (req, res) => {
   const { nom, code } = req.body;
   const university_id = req.user.role === 'super_admin' ? req.body.university_id : req.user.university_id;
   try {
-    const [r] = await db.execute('INSERT INTO departements (nom,code,university_id) VALUES (?,?,?)', [nom, code, university_id]);
-    res.status(201).json({ id: r.insertId });
+    const [r] = await db.execute('INSERT INTO departements (nom,code,university_id) VALUES (?,?,?) RETURNING id', [nom, code, university_id]);
+    res.status(201).json({ id: r[0]?.id });
   } catch (err) { res.status(400).json({ message: 'Erreur lors de la création', error: err.message }); }
 };
 
@@ -73,8 +73,8 @@ exports.createFiliere = async (req, res) => {
   const { nom, code, departement_id } = req.body;
   const university_id = req.user.role === 'super_admin' ? req.body.university_id : req.user.university_id;
   try {
-    const [r] = await db.execute('INSERT INTO filieres (nom,code,departement_id,university_id) VALUES (?,?,?,?)', [nom, code, departement_id || null, university_id]);
-    res.status(201).json({ id: r.insertId });
+    const [r] = await db.execute('INSERT INTO filieres (nom,code,departement_id,university_id) VALUES (?,?,?,?) RETURNING id', [nom, code, departement_id || null, university_id]);
+    res.status(201).json({ id: r[0]?.id });
   } catch (err) { res.status(400).json({ message: 'Erreur lors de la création', error: err.message }); }
 };
 
@@ -131,10 +131,10 @@ exports.createMatiere = async (req, res) => {
   const university_id = req.user.role === 'super_admin' ? req.body.university_id : req.user.university_id;
   try {
     const [r] = await db.execute(
-      'INSERT INTO matieres (intitule,code,filiere_id,niveau,semestre,volume_horaire_prevu_cm,volume_horaire_prevu_td,volume_horaire_prevu_tp,annee_academique_id,university_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO matieres (intitule,code,filiere_id,niveau,semestre,volume_horaire_prevu_cm,volume_horaire_prevu_td,volume_horaire_prevu_tp,annee_academique_id,university_id) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id',
       [intitule, code || null, filiere_id || null, niveau, semestre || 'S1', volume_horaire_prevu_cm || 0, volume_horaire_prevu_td || 0, volume_horaire_prevu_tp || 0, annee_academique_id || null, university_id]
     );
-    res.status(201).json({ id: r.insertId });
+    res.status(201).json({ id: r[0]?.id });
   } catch (err) { res.status(400).json({ message: 'Erreur lors de la création', error: err.message }); }
 };
 
@@ -191,10 +191,10 @@ exports.createAnnee = async (req, res) => {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
-    if (is_active) await conn.execute('UPDATE annees_academiques SET is_active=0 WHERE university_id = ?', [university_id]);
-    const [r] = await conn.execute('INSERT INTO annees_academiques (libelle,date_debut,date_fin,is_active,university_id) VALUES (?,?,?,?,?)', [libelle, date_debut, date_fin, is_active ? 1 : 0, university_id]);
+    if (is_active) await conn.execute('UPDATE annees_academiques SET is_active=FALSE WHERE university_id = ?', [university_id]);
+    const [r] = await conn.execute('INSERT INTO annees_academiques (libelle,date_debut,date_fin,is_active,university_id) VALUES (?,?,?,?,?) RETURNING id', [libelle, date_debut, date_fin, is_active ? true : false, university_id]);
     await conn.commit();
-    res.status(201).json({ id: r.insertId });
+    res.status(201).json({ id: r[0]?.id });
   } catch (err) { await conn.rollback(); res.status(400).json({ message: 'Erreur lors de la création', error: err.message }); }
   finally { conn.release(); }
 };
@@ -218,9 +218,9 @@ exports.activateAnnee = async (req, res) => {
     }
 
     // Désactiver toutes les années de cette université
-    await conn.execute('UPDATE annees_academiques SET is_active=0 WHERE university_id=?', [university_id]);
+    await conn.execute('UPDATE annees_academiques SET is_active=FALSE WHERE university_id=?', [university_id]);
     // Activer l'année spécifiée
-    await conn.execute('UPDATE annees_academiques SET is_active=1 WHERE id=?', [req.params.id]);
+    await conn.execute('UPDATE annees_academiques SET is_active=TRUE WHERE id=?', [req.params.id]);
     await conn.commit();
     res.json({ message: 'Année académique activée' });
   } catch (err) {

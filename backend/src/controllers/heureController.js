@@ -32,7 +32,7 @@ const recalculateComplementaryStatus = async (enseignant_id, annee_id) => {
   for (const h of heures) {
     const dureeEquiv = parseFloat(h.duree_equivalente || 0);
     const isComp = (cumul + dureeEquiv) > seuil;
-    await db.execute('UPDATE heures_effectuees SET is_complementaire=? WHERE id=?', [isComp ? 1 : 0, h.id]);
+    await db.execute('UPDATE heures_effectuees SET is_complementaire=? WHERE id=?', [isComp, h.id]);
     cumul += dureeEquiv;
   }
 };
@@ -130,15 +130,15 @@ exports.create = async (req, res) => {
     const [result] = await db.execute(
       `INSERT INTO heures_effectuees (enseignant_id, matiere_id, annee_academique_id, date_cours,
         type_heure, duree, duree_equivalente, salle, observations, university_id)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id`,
       [enseignant_id, matiere_id || null, annee_academique_id, date_cours,
        type_heure, duree, duree_equivalente, salle || null, observations || null, university_id]
     );
     
     await recalculateComplementaryStatus(enseignant_id, annee_academique_id);
     
-    await auditLog(req.user.id, 'CREATE', 'heures_effectuees', result.insertId, req.body, req.ip);
-    res.status(201).json({ id: result.insertId, message: 'Heures enregistrées' });
+    await auditLog(req.user.id, 'CREATE', 'heures_effectuees', result[0]?.id, req.body, req.ip);
+    res.status(201).json({ id: result[0]?.id, message: 'Heures enregistrées' });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }
@@ -210,7 +210,7 @@ exports.valider = async (req, res) => {
     }
 
     await db.execute(
-      'UPDATE heures_effectuees SET valide=1, valide_par=?, valide_le=NOW() WHERE id=?',
+      'UPDATE heures_effectuees SET valide=TRUE, valide_par=?, valide_le=NOW() WHERE id=?',
       [req.user.id, req.params.id]
     );
     res.json({ message: 'Heure validée avec succès' });
@@ -221,7 +221,7 @@ exports.valider = async (req, res) => {
 
 exports.getPendingCount = async (req, res) => {
   try {
-    let query = 'SELECT COUNT(*) as count FROM heures_effectuees WHERE valide = 0';
+    let query = 'SELECT COUNT(*) as count FROM heures_effectuees WHERE valide = FALSE';
     const params = [];
     
     if (req.user.role === 'enseignant') {

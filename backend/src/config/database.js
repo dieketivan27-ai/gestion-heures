@@ -1,93 +1,161 @@
-const mysql = require('mysql2/promise');
+const { Pool } = require('pg');
 
+// ─────────────────────────────────────────────────────────────────
+// Résolution de l'URL de connexion PostgreSQL
 // Ordre de priorité :
-// 1. MYSQL_PUBLIC_URL → URL publique Railway (TCP proxy, toujours accessible)
-// 2. MYSQL_URL / DATABASE_URL → URL interne Railway (.railway.internal, réseau privé)
-// 3. Variables individuelles MYSQLHOST / DB_HOST → fallback
-const connectionUrl = process.env.MYSQL_PUBLIC_URL
-  || process.env.MYSQL_URL
-  || process.env.DATABASE_URL;
+//  1. DATABASE_URL (format Render/Heroku: postgres://user:pass@host:port/db)
+//  2. Variables individuelles DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
+// ─────────────────────────────────────────────────────────────────
+const connectionUrl = process.env.DATABASE_URL;
 
-// Options communes du pool
-const basePoolOptions = {
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  charset: 'utf8mb4',
-  connectAttributes: { program_name: 'gestion_heures' },
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 10000,
-};
-
-let pool;
+let poolConfig;
 
 if (connectionUrl) {
-  // Mode 1 : Connexion via URL complète (ex: mysql://user:pass@host:port/db)
-  const sanitizedUrl = connectionUrl.replace(/:([^:@]+)@/, ':****@');
-  console.log(`🔌 Connexion MySQL via URL distante : ${sanitizedUrl}`);
-  
-  pool = mysql.createPool({
-    uri: connectionUrl,
-    ...basePoolOptions,
-  });
+  const sanitized = connectionUrl.replace(/:([^:@]+)@/, ':****@');
+  console.log(`🔌 Connexion PostgreSQL via URL : ${sanitized}`);
+  poolConfig = {
+    connectionString: connectionUrl,
+    // SSL activé si DB_SSL=true ou en prod sur Render (sauf si host local/docker ou DB_SSL=false)
+    ssl: (() => {
+      if (process.env.DB_SSL === 'false') return false;
+      if (process.env.DB_SSL === 'true') return { rejectUnauthorized: false };
+      try {
+        const u = new URL(connectionUrl.replace(/^postgresql:\/\//, 'http://').replace(/^postgres:\/\//, 'http://'));
+        if (['localhost', '127.0.0.1', 'postgres'].includes(u.hostname)) return false;
+      } catch (e) {}
+      return process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false;
+    })(),
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  };
 } else {
-  // Mode 2 : Connexion via variables individuelles (Railway ou variables DB_ classiques)
-  const host = process.env.MYSQLHOST || process.env.DB_HOST || '127.0.0.1';
-  const port = Number(process.env.MYSQLPORT || process.env.DB_PORT) || 3306;
-  const user = process.env.MYSQLUSER || process.env.DB_USER || 'root';
-  const password = process.env.MYSQLPASSWORD !== undefined ? process.env.MYSQLPASSWORD : (process.env.DB_PASSWORD || '');
-  const database = process.env.MYSQLDATABASE || process.env.DB_NAME || 'gestion_heures';
+  const host     = process.env.DB_HOST     || '127.0.0.1';
+  const port     = Number(process.env.DB_PORT) || 5432;
+  const user     = process.env.DB_USER     || 'postgres';
+  const password = process.env.DB_PASSWORD || '';
+  const database = process.env.DB_NAME     || 'gestion_heures';
 
-  console.log(`🔌 Connexion MySQL cible : ${user}@${host}:${port}/${database}`);
-
-  pool = mysql.createPool({
+  console.log(`🔌 Connexion PostgreSQL : ${user}@${host}:${port}/${database}`);
+  poolConfig = {
     host,
     port,
     user,
     password,
     database,
-    ...basePoolOptions,
-  });
+    ssl: false,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  };
 }
 
-// Guarantee utf8mb4 is used for every connection pulled from the pool
-pool.on('connection', (connection) => {
-  connection.query("SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'");
-});
+const pool = new Pool(poolConfig);
 
-// Intercepte les erreurs fatales du pool mysql2 pour éviter le crash Node.js
-// (mysql2 émet 'error' avec fatal:true quand l'hôte est injoignable)
-pool.on('error', (err) => {
-  console.error('❌ Erreur pool MySQL:', err.message);
-  if (err.fatal) {
-    console.error('💀 Erreur fatale interceptée — vérifiez MYSQL_PUBLIC_URL sur Railway.');
-    // Ne pas re-throw : le serveur reste en ligne, les routes répondront avec 503
-  }
-});
+// ─────────────────────────────────────────────────────────────────
+// Couche de compatibilité : convertit la syntaxe mysql2 (? et VALUES ?)
+// en syntaxe PostgreSQL ($1, $2, ...)
+// ─────────────────────────────────────────────────────────────────
 
-// Test de connectivité non bloquant avec retry (ne crashe JAMAIS le serveur)
+/**
+ * Convertit les placeholders '?' en '$1', '$2', ...
+ * Normalise également les comparaisons booléennes héritées de MySQL (= 1 / = 0)
+ */
+function convertPlaceholders(sql) {
+  const normalized = sql
+    .replace(/\bis_active\s*=\s*1\b/gi, 'is_active = TRUE')
+    .replace(/\bis_active\s*=\s*0\b/gi, 'is_active = FALSE')
+    .replace(/\bvalide\s*=\s*1\b/gi, 'valide = TRUE')
+    .replace(/\bvalide\s*=\s*0\b/gi, 'valide = FALSE')
+    .replace(/\bmust_change_password\s*=\s*1\b/gi, 'must_change_password = TRUE')
+    .replace(/\bmust_change_password\s*=\s*0\b/gi, 'must_change_password = FALSE');
+  let i = 0;
+  return normalized.replace(/\?/g, () => `$${++i}`);
+}
+
+/**
+ * pool.execute(sql, params) — API mysql2-compatible
+ * Retourne [rows, fields] comme mysql2/promise.
+ * Ajoute .insertId sur le résultat si SQL contient RETURNING.
+ */
+pool.execute = async function (sql, params = []) {
+  const pgSql = convertPlaceholders(sql);
+  const result = await pool.query(pgSql, params);
+
+  // Simuler [rows] comme mysql2
+  const rows = result.rows;
+
+  // Simuler result.insertId et result.affectedRows
+  rows.insertId      = result.rows[0]?.id ?? null;
+  rows.affectedRows  = result.rowCount ?? 0;
+
+  return [rows, result.fields];
+};
+
+/**
+ * pool.getConnection() — Simule la récupération d'un client dédié (pour les transactions)
+ * Retourne un objet client avec .execute(), .beginTransaction(), .commit(), .rollback(), .release()
+ */
+pool.getConnection = async function () {
+  const client = await pool.connect();
+
+  // Wrapper execute() sur le client
+  client.execute = async function (sql, params = []) {
+    const pgSql = convertPlaceholders(sql);
+    const result = await client.query(pgSql, params);
+    const rows = result.rows;
+    rows.insertId     = result.rows[0]?.id ?? null;
+    rows.affectedRows = result.rowCount ?? 0;
+    return [rows, result.fields];
+  };
+
+  // mysql2 bulk INSERT: conn.query('INSERT ... VALUES ?', [[...]])
+  // pg n'a pas cet équivalent direct — on le gère dans les contrôleurs
+  client.query = client.query.bind(client);
+
+  client.beginTransaction = async function () {
+    await client.query('BEGIN');
+  };
+  client.commit = async function () {
+    await client.query('COMMIT');
+  };
+  client.rollback = async function () {
+    await client.query('ROLLBACK');
+  };
+  // client.release() existe déjà nativement sur les clients pg
+
+  return client;
+};
+
+// ─────────────────────────────────────────────────────────────────
+// Test de connectivité non bloquant avec retry
+// ─────────────────────────────────────────────────────────────────
 (async () => {
   let retries = 3;
   while (retries > 0) {
     try {
-      const conn = await pool.getConnection();
-      console.log('✅ Connexion MySQL établie avec succès');
-      conn.release();
+      const client = await pool.connect();
+      const res = await client.query('SELECT current_database() as db');
+      console.log(`✅ Connexion PostgreSQL établie — base : ${res.rows[0].db}`);
+      client.release();
       return;
     } catch (err) {
       retries--;
-      console.error(`❌ Erreur connexion MySQL (${3 - retries}/3): ${err.message}`);
+      console.error(`❌ Erreur connexion PostgreSQL (${3 - retries}/3): ${err.message}`);
       if (retries > 0) {
         console.log('   ↻ Nouvelle tentative dans 5 secondes...');
         await new Promise(r => setTimeout(r, 5000));
       } else {
-        console.error('⚠️  MySQL inaccessible au démarrage — le serveur continue (HTTP OK, DB KO).');
+        console.error('⚠️  PostgreSQL inaccessible au démarrage — le serveur continue (HTTP OK, DB KO).');
       }
     }
   }
 })().catch(err => {
-  // Sécurité absolue : capturer toute erreur non prévue pour ne JAMAIS crasher le process
-  console.error('⚠️  Erreur inattendue lors du test de connexion MySQL:', err.message);
+  console.error('⚠️  Erreur inattendue lors du test de connexion PostgreSQL:', err.message);
+});
+
+pool.on('error', (err) => {
+  console.error('❌ Erreur pool PostgreSQL:', err.message);
 });
 
 module.exports = pool;

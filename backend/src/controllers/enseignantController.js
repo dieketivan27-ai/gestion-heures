@@ -34,9 +34,12 @@ exports.getAll = async (req, res) => {
       FROM enseignants e
       LEFT JOIN users u ON e.user_id = u.id
       LEFT JOIN departements d ON e.departement_id = d.id
-      LEFT JOIN heures_effectuees h ON h.enseignant_id = e.id ${joinOnAnnee} AND h.valide = 1
+      LEFT JOIN heures_effectuees h ON h.enseignant_id = e.id ${joinOnAnnee} AND h.valide = TRUE
       ${whereClause}
-      GROUP BY e.id ORDER BY e.nom, e.prenom
+      GROUP BY e.id, e.nom, e.prenom, e.grade, e.statut, e.matricule, e.email, e.telephone,
+               e.departement_id, e.taux_horaire_cm, e.taux_horaire_td, e.taux_horaire_tp,
+               e.heures_contractuelles, e.university_id, e.user_id, e.created_at, e.updated_at,
+               u.avatar_url, d.nom ORDER BY e.nom, e.prenom
     `, queryParams);
 
     // Récupérer les matières pour tous ces enseignants
@@ -120,33 +123,36 @@ exports.create = async (req, res) => {
     
     // Création du compte utilisateur avec obligation de changement de MDP
     const [userRes] = await conn.execute(
-      'INSERT INTO users (email, password, role, nom, prenom, must_change_password, university_id) VALUES (?,?,?,?,?,TRUE,?)',
+      'INSERT INTO users (email, password, role, nom, prenom, must_change_password, university_id) VALUES (?,?,?,?,?,TRUE,?) RETURNING id',
       [email, hash, 'enseignant', nom, prenom, university_id]
     );
-    const user_id = userRes.insertId;
+    const user_id = userRes[0]?.id;
     
     // Création de l'enseignant
     const [result] = await conn.execute(
       `INSERT INTO enseignants (user_id, matricule, nom, prenom, email, telephone, grade, statut,
         departement_id, taux_horaire_cm, taux_horaire_td, taux_horaire_tp, heures_contractuelles, university_id)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`,
       [user_id, matricule || null, nom, prenom, email, telephone || null, grade, statut,
        departement_id || null, taux_horaire_cm || 0, taux_horaire_td || 0,
        taux_horaire_tp || 0, (heures_contractuelles !== undefined) ? heures_contractuelles : (statut === 'Vacataire' ? 0 : 192), university_id]
     );
     
-    const enseignant_id = result.insertId;
+    const enseignant_id = result[0]?.id;
 
     // Ajout des matières avec semestre dans attributions_matieres
     if (matieres && Array.isArray(matieres) && matieres.length > 0) {
       // Récupérer l'année académique active de cette université
-      const [[activeYear]] = await conn.execute('SELECT id FROM annees_academiques WHERE is_active = 1 AND university_id = ? LIMIT 1', [university_id]);
+      const [[activeYear]] = await conn.execute('SELECT id FROM annees_academiques WHERE is_active = TRUE AND university_id = ? LIMIT 1', [university_id]);
       const anneeId = activeYear ? activeYear.id : null;
 
       // Insérer aussi dans l'ancienne table pour compatibilité
-      const oldValues = matieres.map(m => [enseignant_id, typeof m === 'object' ? m.id : m]);
-      if (oldValues.length > 0) {
-        await conn.query('INSERT IGNORE INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [oldValues]);
+      for (const m of matieres) {
+        const mId = typeof m === 'object' ? m.id : m;
+        await conn.execute(
+          'INSERT INTO enseignants_matieres (enseignant_id, matiere_id) VALUES (?,?) ON CONFLICT DO NOTHING',
+          [enseignant_id, mId]
+        );
       }
 
       // Insérer dans attributions_matieres (nouvelle table)
@@ -157,7 +163,7 @@ exports.create = async (req, res) => {
           await conn.execute(
             `INSERT INTO attributions_matieres (enseignant_id, matiere_id, annee_academique_id, semestre, statut, university_id)
              VALUES (?, ?, ?, ?, 'EN_ATTENTE', ?)
-             ON DUPLICATE KEY UPDATE semestre = VALUES(semestre)`,
+             ON CONFLICT (enseignant_id, matiere_id, annee_academique_id) DO UPDATE SET semestre = EXCLUDED.semestre`,
             [enseignant_id, matiereId, anneeId, semestre, university_id]
           );
         }
@@ -178,7 +184,7 @@ exports.create = async (req, res) => {
     });
   } catch (err) {
     await conn.rollback();
-    if (err.code === 'ER_DUP_ENTRY')
+    if (err.code === '23505')
       return res.status(400).json({ message: 'Email ou matricule déjà utilisé' });
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   } finally {
@@ -220,14 +226,17 @@ exports.update = async (req, res) => {
     // Sync les matières — on ne supprime que les EN_ATTENTE
     if (matieres && Array.isArray(matieres)) {
       // Récupérer l'année académique active de cette université
-      const [[activeYear]] = await conn.execute('SELECT id FROM annees_academiques WHERE is_active = 1 AND university_id = ? LIMIT 1', [university_id]);
+      const [[activeYear]] = await conn.execute('SELECT id FROM annees_academiques WHERE is_active = TRUE AND university_id = ? LIMIT 1', [university_id]);
       const anneeId = activeYear ? activeYear.id : null;
 
       // Sync ancienne table pour compatibilité
       await conn.execute('DELETE FROM enseignants_matieres WHERE enseignant_id = ?', [req.params.id]);
-      if (matieres.length > 0) {
-        const oldValues = matieres.map(m => [req.params.id, typeof m === 'object' ? m.id : m]);
-        await conn.query('INSERT IGNORE INTO enseignants_matieres (enseignant_id, matiere_id) VALUES ?', [oldValues]);
+      for (const m of matieres) {
+        const mId = typeof m === 'object' ? m.id : m;
+        await conn.execute(
+          'INSERT INTO enseignants_matieres (enseignant_id, matiere_id) VALUES (?,?) ON CONFLICT DO NOTHING',
+          [req.params.id, mId]
+        );
       }
 
       // Sync table attributions_matieres (seulement les EN_ATTENTE)
@@ -242,7 +251,7 @@ exports.update = async (req, res) => {
           await conn.execute(
             `INSERT INTO attributions_matieres (enseignant_id, matiere_id, annee_academique_id, semestre, statut, university_id)
              VALUES (?, ?, ?, ?, 'EN_ATTENTE', ?)
-             ON DUPLICATE KEY UPDATE semestre = VALUES(semestre)`,
+             ON CONFLICT (enseignant_id, matiere_id, annee_academique_id) DO UPDATE SET semestre = EXCLUDED.semestre`,
             [req.params.id, matiereId, anneeId, semestre, university_id]
           );
         }

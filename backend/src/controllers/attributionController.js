@@ -123,7 +123,7 @@ exports.createAttribution = async (req, res) => {
   try {
     // Auto-résoudre l'année active de cette université si non fournie
     if (!annee_academique_id) {
-      const [[activeYear]] = await db.execute('SELECT id FROM annees_academiques WHERE is_active = 1 AND university_id = ? LIMIT 1', [university_id]);
+      const [[activeYear]] = await db.execute('SELECT id FROM annees_academiques WHERE is_active = TRUE AND university_id = ? LIMIT 1', [university_id]);
       if (!activeYear) return res.status(400).json({ message: "Aucune année académique active pour cette université." });
       annee_academique_id = activeYear.id;
     }
@@ -131,13 +131,15 @@ exports.createAttribution = async (req, res) => {
     const [result] = await db.execute(
       `INSERT INTO attributions_matieres (enseignant_id, matiere_id, annee_academique_id, semestre, heures_total, statut, university_id)
        VALUES (?, ?, ?, ?, ?, 'EN_ATTENTE', ?)
-       ON DUPLICATE KEY UPDATE semestre = VALUES(semestre), heures_total = VALUES(heures_total), statut = 'EN_ATTENTE'`,
+       ON CONFLICT (enseignant_id, matiere_id, annee_academique_id) DO UPDATE
+         SET semestre = EXCLUDED.semestre, heures_total = EXCLUDED.heures_total, statut = 'EN_ATTENTE'
+       RETURNING id`,
       [enseignant_id, matiere_id, annee_academique_id, semestre || 'S1', heures_total || 0, university_id]
     );
 
-    await auditLog(req.user.id, 'CREATE', 'attributions_matieres', result.insertId, req.body, req.ip);
+    await auditLog(req.user.id, 'CREATE', 'attributions_matieres', result[0]?.id, req.body, req.ip);
 
-    res.status(201).json({ id: result.insertId, message: "Attribution créée et envoyée à l'enseignant." });
+    res.status(201).json({ id: result[0]?.id, message: "Attribution créée et envoyée à l'enseignant." });
   } catch (err) {
     res.status(500).json({ message: 'Erreur serveur', error: err.message });
   }

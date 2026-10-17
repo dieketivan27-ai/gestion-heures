@@ -6,7 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { runMigrations } = require('./config/migrate');
 
-// ✅ Protection globale : empêche tout crash inattendu de tuer le process Railway
+// ✅ Protection globale : empêche tout crash inattendu de tuer le process
 process.on('unhandledRejection', (reason) => {
   console.error('⚠️  unhandledRejection (non fatal):', reason);
 });
@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 3000;
 
 const APP_VERSION = Date.now().toString();
 
-// Origines autorisées (ajouter d'autres URLs via la variable FRONTEND_URL sur Railway)
+// Origines autorisées — configurable via FRONTEND_URL (sur Render)
 const allowedOrigins = [
   'https://gestion-heures-gold.vercel.app',
   ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
@@ -64,8 +64,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Railway est derrière un reverse proxy — nécessaire pour que express-rate-limit
-// identifie correctement les IPs et évite ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// Render (et la plupart des hébergeurs) sont derrière un reverse proxy
+// Nécessaire pour que express-rate-limit identifie correctement les IPs
 app.set('trust proxy', 1);
 
 // Rate limiting
@@ -106,12 +106,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server immediately so health checks pass on Railway
+// Démarrage immédiat pour que les health checks passent dès le boot
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Serveur démarré sur le port ${PORT}`);
   console.log(`📡 Environnement: ${process.env.NODE_ENV}`);
   
-  // Run database migrations in background
+  // Migrations en arrière-plan
   runMigrations().catch(err => {
     console.error('⚠️ Échec des migrations au démarrage:', err.message);
   });

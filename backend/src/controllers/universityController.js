@@ -32,8 +32,8 @@ exports.createUniversity = async (req, res) => {
       return res.status(400).json({ message: 'Une université avec ce nom ou sigle existe déjà' });
     }
 
-    const [r] = await conn.execute('INSERT INTO universities (nom, sigle) VALUES (?, ?)', [nom.trim(), sigle?.toUpperCase().trim() || null]);
-    const universityId = r.insertId;
+    const [r] = await conn.execute('INSERT INTO universities (nom, sigle) VALUES (?, ?) RETURNING id', [nom.trim(), sigle?.toUpperCase().trim() || null]);
+    const universityId = r[0]?.id;
 
     // Seed default parameters for this university
     await conn.execute(`
@@ -42,7 +42,7 @@ exports.createUniversity = async (req, res) => {
       ('equivalence_cm_tp', '2', '1h CM = X heures TP équivalent', ?),
       ('seuil_heures_complementaires_permanent', '192', 'Seuil heures complémentaires pour permanents', ?),
       ('seuil_heures_complementaires_vacataire', '0', 'Seuil heures complémentaires pour vacataires', ?)
-    `, [universityId, universityId, universityId, universityId]);
+      ON CONFLICT (cle, university_id) DO NOTHING`, [universityId, universityId, universityId, universityId]);
 
     const sigleSlug = (sigle?.toUpperCase().trim() || `U${universityId}`).replace(/[^A-Z0-9]/g, '');
 

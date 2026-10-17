@@ -1,0 +1,66 @@
+services:
+  # ──────────────────────────────────────────────────────────
+  # Base de données PostgreSQL managée par Render
+  # ──────────────────────────────────────────────────────────
+  - type: pserv
+    name: gestion-heures-db
+    plan: free
+    databaseName: gestion_heures
+    databaseUser: gestion_user
+
+  # ──────────────────────────────────────────────────────────
+  # Web Service Docker — Backend Node.js
+  # ──────────────────────────────────────────────────────────
+  - type: web
+    name: gestion-heures-backend
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # URL de la base injectée automatiquement depuis le service PostgreSQL
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gestion-heures-db
+          property: connectionString
+
+      # Port (Render injecte automatiquement PORT, cette valeur sert de fallback)
+      - key: PORT
+        value: 8080
+
+      - key: NODE_ENV
+        value: production
+
+      # JWT — à définir dans le dashboard Render (Generate)
+      - key: JWT_SECRET
+        generateValue: true
+
+      - key: JWT_EXPIRES_IN
+        value: 30m
+
+      # CORS — URL de votre frontend Vercel
+      - key: FRONTEND_URL
+        value: https://gestion-heures-gold.vercel.app
+
+      - key: APP_URL
+        value: https://gestion-heures-gold.vercel.app
+
+      # Email SMTP — à renseigner dans le dashboard Render
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+
+      - key: MAIL_PORT
+        value: 465
+
+      - key: MAIL_SECURE
+        value: true
+
+      - key: MAIL_USER
+        sync: false   # Saisir manuellement dans Render Dashboard
+
+      - key: MAIL_PASS
+        sync: false   # Saisir manuellement dans Render Dashboard
+
+      - key: MAIL_FROM
+        value: "GestionHeures <no-reply@gestionheures.com>"

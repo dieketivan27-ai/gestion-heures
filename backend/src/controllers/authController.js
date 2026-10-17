@@ -18,7 +18,7 @@ exports.login = async (req, res) => {
        FROM users u
        LEFT JOIN enseignants e ON e.user_id = u.id
        LEFT JOIN universities univ ON u.university_id = univ.id
-       WHERE u.email = ? AND u.is_active = 1`,
+       WHERE u.email = ? AND u.is_active = TRUE`,
       [email]
     );
     if (!rows.length)
@@ -129,7 +129,7 @@ exports.forgotPassword = async (req, res) => {
   if (!email) return res.status(400).json({ message: 'Email requis' });
 
   try {
-    const [users] = await db.execute('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
+    const [users] = await db.execute('SELECT * FROM users WHERE email = ? AND is_active = TRUE', [email]);
     if (!users.length) return res.status(404).json({ message: 'Aucun compte associé à cet email' });
 
     const user = users[0];
@@ -168,7 +168,7 @@ exports.resetPassword = async (req, res) => {
 
   try {
     const [users] = await db.execute(
-      'SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > NOW() AND is_active = 1',
+      'SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > NOW() AND is_active = TRUE',
       [token]
     );
 
@@ -178,7 +178,7 @@ exports.resetPassword = async (req, res) => {
     const hash = await bcrypt.hash(newPassword, 10);
 
     await db.execute(
-      'UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL, must_change_password = 0 WHERE id = ?',
+      'UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL, must_change_password = FALSE WHERE id = ?',
       [hash, user.id]
     );
 
