@@ -163,3 +163,77 @@ C'est le cœur du système, automatisant le calcul de la paie :
 
 ## 10. Conclusion
 **GestionHeures** transforme la gestion académique d'un processus manuel et risqué vers une plateforme numérique robuste, transparente et automatisée. Elle offre une visibilité totale à l'administration tout en simplifiant le quotidien des enseignants.
+
+---
+
+## 11. Déploiement en production (Render + Neon)
+
+### Architecture de déploiement
+| Composant | Hébergeur | Notes |
+|-----------|-----------|-------|
+| **Backend API** | [Render](https://render.com) | Docker, région Frankfurt |
+| **Base de données** | [Neon](https://neon.tech) | PostgreSQL serverless, SSL obligatoire |
+| **Frontend** | [Vercel](https://vercel.com) | Angular build statique |
+
+### Étape 1 — Créer la base de données sur Neon
+
+1. Aller sur [console.neon.tech](https://console.neon.tech) et créer un compte
+2. Créer un nouveau projet → choisir la région **EU Central (Frankfurt)** pour minimiser la latence avec Render
+3. Dans **Dashboard → Connection Details**, copier la **Connection string** (format pooler recommandé) :
+   ```
+   postgresql://user:password@ep-xxx-yyy.eu-central-1.aws.neon.tech/dbname?sslmode=require
+   ```
+
+### Étape 2 — Déployer le backend sur Render
+
+1. Aller sur [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint**
+2. Sélectionner ce dépôt — Render détecte `render.yaml` automatiquement
+3. Dans **Environment**, définir manuellement les variables secrètes :
+
+   | Variable | Valeur |
+   |----------|--------|
+   | `DATABASE_URL` | Connection string Neon copiée à l'étape 1 |
+   | `MAIL_USER` | Adresse Gmail de l'expéditeur |
+   | `MAIL_PASS` | Mot de passe applicatif Gmail |
+
+4. Cliquer **Apply** → Render construit le Docker et démarre le service
+
+> **Note :** `JWT_SECRET` est généré automatiquement par Render (`generateValue: true`).  
+> Les migrations SQL s'exécutent **automatiquement au démarrage** sur la base Neon vide.
+
+### Étape 3 — Vérifier le déploiement
+
+```bash
+# Health check (remplacer par l'URL Render du service)
+curl https://gestion-heures-backend.onrender.com/health
+# Réponse attendue : {"success":true,"message":"API is running",...}
+```
+
+Les logs de démarrage doivent afficher :
+```
+✅ Connexion PostgreSQL établie — base : dbname
+✅ Toutes les migrations sont à jour.
+🚀 Serveur démarré sur le port 8080
+```
+
+### Étape 4 — Manual Sync (si le service existe déjà)
+
+Si le service Render existe déjà, pour appliquer les changements du `render.yaml` :
+- Dashboard Render → Service → **Settings → Deploy → Manual Deploy**  
+- Ou via CLI : `render deploy --service-id <id>`
+
+### Développement local
+
+```bash
+# 1. Copier et remplir les variables
+cp backend/.env.example backend/.env
+# Renseigner DATABASE_URL avec une base locale ou une branche Neon de dev
+
+# 2. Démarrer le backend
+cd backend && npm install && npm run dev
+
+# 3. Vérifier la connexion
+curl http://localhost:8080/health
+```
+
+> **SSL en local :** Si `DATABASE_URL` pointe vers `localhost` ou `127.0.0.1`, le SSL est automatiquement désactivé. Pour une branche Neon en local, l'URL contient `sslmode=require` → SSL activé automatiquement.

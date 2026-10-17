@@ -15,17 +15,19 @@ if (connectionUrl) {
   console.log(`🔌 Connexion PostgreSQL via URL : ${sanitized}`);
   poolConfig = {
     connectionString: connectionUrl,
-    // SSL activé si DB_SSL=true ou en prod sur Render (sauf si host local/docker ou DB_SSL=false)
+    // SSL activé si DB_SSL=true, ou si l'URL contient sslmode=require (Neon),
+    // ou en production avec un hôte distant — désactivé en local/docker
     ssl: (() => {
       if (process.env.DB_SSL === 'false') return false;
       if (process.env.DB_SSL === 'true') return { rejectUnauthorized: false };
+      if (connectionUrl.includes('sslmode=require')) return { rejectUnauthorized: false };
       try {
         const u = new URL(connectionUrl.replace(/^postgresql:\/\//, 'http://').replace(/^postgres:\/\//, 'http://'));
         if (['localhost', '127.0.0.1', 'postgres'].includes(u.hostname)) return false;
       } catch (e) {}
       return process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false;
     })(),
-    max: 10,
+    max: 3,                    // Neon Free ≤ 5 connexions simultanées
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
   };
